@@ -1,0 +1,3232 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevLog v14</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+:root{
+  --bg:#0a0c10;--bg2:#10141c;--bg3:#161b26;
+  --border:#1e2535;--border2:#2a3347;
+  --text:#c8d4e8;--text2:#6b7a96;--text3:#3d4a63;
+  --accent:#4a9eff;--red:#ff4d6a;--green:#3ddc84;--gold:#f5c542;--orange:#ff9f43;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+body.modal-open{overflow:hidden;}
+
+/* modal scroll fix */
+.modal-overlay.open .modal{-webkit-overflow-scrolling:touch;}
+
+/* ── TOPBAR ── */
+#topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;z-index:100;flex-wrap:wrap;}
+#topbar h1{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);letter-spacing:2px;white-space:nowrap;}
+.tsep{width:1px;height:18px;background:var(--border2);flex-shrink:0;}
+#project-name{font-size:13px;color:var(--text);background:none;border:none;outline:none;cursor:pointer;padding:3px 7px;border-radius:4px;}
+#project-name:hover{background:var(--bg3);}
+.spacer{flex:1;}
+#search-wrap{position:relative;display:flex;align-items:center;}
+#search-wrap svg{position:absolute;left:8px;opacity:.4;pointer-events:none;}
+#search-input{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:5px 9px 5px 28px;width:160px;outline:none;transition:border-color .2s,width .3s;}
+#search-input:focus{border-color:var(--accent);width:220px;}
+#search-input::placeholder{color:var(--text3);}
+.btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:'Noto Sans TC',sans-serif;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:600;}
+.btn.primary:hover{background:#6cb5ff;}
+.btn.danger{border-color:var(--red);color:var(--red);}
+.btn.danger:hover{background:rgba(255,77,106,.1);}
+.btn:disabled{opacity:.35;cursor:default;pointer-events:none;}
+
+/* view mode toggle */
+#view-toggle{display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;}
+.vt-btn{padding:5px 9px;background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;border:none;font-family:'Noto Sans TC',sans-serif;transition:all .15s;}
+.vt-btn.active{background:var(--accent);color:#000;font-weight:600;}
+
+/* ── MAIN ── */
+#main{display:flex;flex:1;overflow:hidden;min-height:0;}
+
+/* ── CANVAS (pie mode) ── */
+#canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;}
+#canvas-wrap.grabbing{cursor:grabbing;}
+#graph-canvas{position:absolute;top:0;left:0;}
+
+/* ── FOLDER MODE ── */
+#folder-view{flex:1;min-width:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:18px;display:none;}
+#folder-view.active{display:block;}
+
+
+.fn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.fn-title{flex:1;font-weight:500;}
+.fn-badges{display:flex;gap:4px;}
+.fn-badge{font-size:9px;padding:2px 5px;border-radius:8px;font-weight:700;}
+.fn-badge.fail{background:rgba(255,77,106,.15);color:var(--red);border:1px solid rgba(255,77,106,.3);}
+.fn-badge.inherited{background:rgba(255,159,67,.12);color:var(--orange);border:1px solid rgba(255,159,67,.25);}
+.fn-children{margin-left:20px;border-left:1px solid var(--border);padding-left:8px;}
+
+/* Sector arcs drawn directly onto graph-canvas */
+
+/* ── CANVAS CONTROLS ── */
+#canvas-controls{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:50;}
+.cc-btn{width:30px;height:30px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.cc-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+/* ── LEGEND ── */
+#branch-legend{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:4px;z-index:50;}
+.legend-item{display:flex;align-items:center;gap:6px;padding:3px 9px;background:rgba(16,20,28,.88);border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:11px;transition:border-color .15s;}
+.legend-item:hover{border-color:var(--border2);}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+
+/* ── SEARCH RESULTS ── */
+#search-results{position:absolute;top:44px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:6px;z-index:200;min-width:300px;max-height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;display:none;box-shadow:0 8px 28px rgba(0,0,0,.5);}
+.sr-item{padding:7px 11px;border-radius:5px;cursor:pointer;font-size:12px;transition:background .1s;}
+.sr-item:hover{background:var(--bg3);}
+.sr-title{font-weight:600;color:var(--text);}
+.sr-sub{color:var(--text2);font-size:11px;margin-top:1px;}
+
+/* ── RIGHT PANEL ── */
+#panel{width:0;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .22s ease;flex-shrink:0;min-width:0;}
+#panel.open{width:370px;}
+#panel.folder-overlay{position:fixed;right:0;top:0;bottom:0;height:100%;z-index:300;box-shadow:-4px 0 20px rgba(0,0,0,.4);}
+#folder-backdrop{display:none;position:fixed;inset:0;z-index:299;background:rgba(0,0,0,.35);}
+#folder-backdrop.active{display:block;}
+#panel-inner{width:370px;display:flex;flex-direction:column;height:100%;overflow:hidden;}
+#panel-header{padding:14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:9px;flex-shrink:0;}
+#panel-color-dot{width:11px;height:11px;border-radius:50%;margin-top:3px;flex-shrink:0;}
+#panel-title-wrap{flex:1;min-width:0;}
+#panel-title{font-size:14px;font-weight:700;color:var(--text);background:none;border:none;outline:none;width:100%;font-family:'Noto Sans TC',sans-serif;padding:2px 0;}
+#panel-meta{font-size:10px;color:var(--text3);margin-top:2px;font-family:'JetBrains Mono',monospace;}
+#panel-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:17px;line-height:1;transition:color .15s;flex-shrink:0;}
+#panel-close:hover{color:var(--text);}
+#panel-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;}
+.fl{font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);margin-bottom:5px;}
+.fi,.fta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 9px;outline:none;font-family:'Noto Sans TC',sans-serif;transition:border-color .15s;resize:none;}
+.fi:focus,.fta:focus{border-color:var(--accent);}
+.fta{min-height:72px;line-height:1.6;}
+.fta.mono{font-family:'JetBrains Mono',monospace;font-size:11px;background:#0d1017;}
+#tags-wrap{display:flex;flex-wrap:wrap;gap:4px;}
+.tag{display:flex;align-items:center;gap:3px;padding:2px 7px;border-radius:12px;font-size:11px;border:1px solid var(--border2);color:var(--text2);}
+.tag-del{cursor:pointer;opacity:.5;font-size:11px;}
+.tag-del:hover{opacity:1;}
+#tag-input{background:none;border:1px dashed var(--border2);border-radius:12px;color:var(--text2);font-size:11px;padding:2px 7px;outline:none;width:70px;font-family:'Noto Sans TC',sans-serif;}
+#images-wrap{display:flex;flex-wrap:wrap;gap:6px;}
+.img-thumb{width:64px;height:64px;border-radius:5px;object-fit:cover;border:1px solid var(--border2);cursor:pointer;transition:border-color .15s;}
+.img-thumb:hover{border-color:var(--accent);}
+.img-add{width:64px;height:64px;border:1px dashed var(--border2);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:20px;cursor:pointer;transition:all .15s;}
+.img-add:hover{border-color:var(--accent);color:var(--accent);}
+#files-wrap{display:flex;flex-direction:column;gap:5px;}
+.file-item{display:flex;align-items:center;gap:7px;padding:6px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:11px;}
+.file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);}
+.file-sz{color:var(--text3);flex-shrink:0;}
+.file-del{cursor:pointer;color:var(--text3);flex-shrink:0;}
+.file-del:hover{color:var(--red);}
+.file-add{display:flex;align-items:center;gap:5px;padding:6px 9px;border:1px dashed var(--border2);border-radius:5px;color:var(--text3);font-size:11px;cursor:pointer;transition:all .15s;}
+.file-add:hover{border-color:var(--accent);color:var(--accent);}
+#fail-list{display:flex;flex-direction:column;gap:5px;margin-bottom:6px;}
+.fail-item{display:flex;align-items:flex-start;gap:7px;padding:6px 9px;background:rgba(255,77,106,.05);border:1px solid rgba(255,77,106,.18);border-radius:5px;font-size:11px;color:var(--text2);}
+.fail-x{color:var(--red);flex-shrink:0;}
+.fail-del{cursor:pointer;color:var(--text3);flex-shrink:0;margin-left:auto;}
+.fail-del:hover{color:var(--red);}
+.fail-item.inherited{background:rgba(255,159,67,.06);border-color:rgba(255,159,67,.25);}
+.fail-item.inherited .fail-x{color:var(--orange);}
+.fail-from{font-size:9px;color:var(--orange);margin-top:2px;font-style:italic;}
+.fail-row{display:flex;gap:5px;}
+.fail-row input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none;font-family:'Noto Sans TC',sans-serif;}
+.fail-row input:focus{border-color:var(--red);}
+.add-child-btn{width:100%;padding:7px;border:1px dashed var(--border2);border-radius:6px;background:none;color:var(--text3);font-size:11px;cursor:pointer;text-align:center;transition:all .15s;font-family:'Noto Sans TC',sans-serif;}
+.add-child-btn:hover{border-color:var(--accent);color:var(--accent);}
+#panel-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0;}
+#panel-nav{display:flex;align-items:center;gap:5px;padding:7px 14px;border-top:1px solid var(--border);flex-shrink:0;}
+.nav-btn{display:flex;align-items:center;gap:3px;padding:4px 9px;border-radius:5px;border:1px solid var(--border2);background:none;color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s;font-family:'Noto Sans TC',sans-serif;}
+.nav-btn:hover{color:var(--text);border-color:var(--border);}
+.nav-btn.home{color:var(--accent);border-color:rgba(74,158,255,.3);}
+.nav-btn.home:hover{background:rgba(74,158,255,.08);}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;align-items:center;justify-content:center;touch-action:pan-y;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:20px;width:520px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;gap:12px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;}
+.modal h3{font-size:15px;font-weight:700;}
+.modal-btns{display:flex;gap:7px;justify-content:flex-end;margin-top:4px;}
+
+/* color picker */
+.color-swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s;}
+.color-swatch:hover,.color-swatch.sel{border-color:#fff;transform:scale(1.15);}
+
+/* copy doc */
+
+/* ── 主題面板 ── */
+#theme-btn{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);letter-spacing:2px;white-space:nowrap;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:4px;transition:background .15s;}
+#theme-btn:hover{background:rgba(74,158,255,.12);}
+#modal-theme .modal{max-width:560px;}
+#modal-theme .modal h3{display:flex;align-items:center;gap:9px;}
+.theme-crown{font-size:16px;}
+#theme-project-name{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;font-weight:700;padding:8px 11px;outline:none;font-family:'Noto Sans TC',sans-serif;transition:border-color .15s;letter-spacing:.5px;}
+#theme-project-name:focus{border-color:var(--accent);}
+.theme-field-label{font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);margin-bottom:5px;}
+.theme-fta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 9px;outline:none;font-family:'Noto Sans TC',sans-serif;transition:border-color .15s;resize:none;min-height:64px;line-height:1.6;}
+.theme-fta:focus{border-color:var(--accent);}
+.theme-fta.mono{font-family:'JetBrains Mono',monospace;font-size:11px;background:#0d1017;}
+.theme-fields-grid{display:flex;flex-direction:column;gap:10px;}
+.theme-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:10px;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;background:rgba(74,158,255,.1);border:1px solid rgba(74,158,255,.25);color:var(--accent);}
+
+/* ── 文檔複製（panel inline）── */
+#docopy-wrap{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+#docopy-header{display:flex;align-items:center;gap:7px;padding:8px 10px;background:var(--bg3);cursor:pointer;user-select:none;border-bottom:1px solid transparent;}
+#docopy-header:hover{background:var(--bg2);}
+#docopy-header.open{border-bottom-color:var(--border);}
+#docopy-body{display:none;padding:10px;}
+#docopy-body.open{display:flex;flex-direction:column;gap:8px;}
+#docopy-compose{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;line-height:1.7;padding:8px 10px;outline:none;resize:vertical;min-height:120px;font-family:'Noto Sans TC',sans-serif;transition:border-color .15s;}
+#docopy-compose:focus{border-color:var(--accent);}
+#docopy-char{font-size:10px;color:var(--text3);text-align:right;margin-top:-4px;}
+.dc-tag{padding:3px 9px;border-radius:10px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:10px;cursor:pointer;transition:all .15s;font-family:'Noto Sans TC',sans-serif;}
+.dc-tag:hover{border-color:var(--accent);color:var(--accent);}
+.dc-tpl-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;}
+.dc-tpl-slot{padding:6px 4px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;text-align:center;cursor:pointer;font-size:10px;color:var(--text2);transition:all .15s;min-height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;}
+.dc-tpl-slot:hover{border-color:var(--accent);}
+.dc-tpl-slot.has-data{color:var(--text);}
+.dc-tpl-slot .dc-tpl-num{font-size:9px;color:var(--text3);}
+.dc-tpl-slot .dc-tpl-prev{font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:90%;}
+.dc-tpl-slot.is-default{border-color:var(--green)!important;box-shadow:0 0 0 1px rgba(61,220,132,.15);}
+#docopy-tpl-panel{display:none;background:var(--bg2);border:1px solid var(--border2);border-radius:7px;padding:10px;margin-top:2px;}
+#docopy-tpl-panel.open{display:block;}
+
+/* template */
+
+/* ── CONTEXT MENU ── */
+#ctx-menu{display:none;position:fixed;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:5px;z-index:500;min-width:155px;box-shadow:0 8px 22px rgba(0,0,0,.5);}
+.ctx-item{padding:7px 11px;border-radius:5px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:background .1s;}
+.ctx-item:hover{background:var(--bg3);}
+.ctx-item.danger{color:var(--red);}
+.ctx-sep{height:1px;background:var(--border);margin:3px 0;}
+
+/* lightbox */
+#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;align-items:center;justify-content:center;cursor:zoom-out;}
+#lightbox.open{display:flex;}
+#lightbox img{max-width:90vw;max-height:90vh;border-radius:7px;}
+#toast{position:fixed;bottom:54px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:7px;padding:8px 16px;font-size:12px;color:var(--text);z-index:900;pointer-events:none;opacity:0;transition:opacity .3s;}
+
+
+/* ── THREE-TIER FOLDER ── */
+.main-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.main-header{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;user-select:none;background:var(--bg3);}
+.main-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.main-name{font-weight:700;font-size:14px;flex:1;}
+.main-desc{font-size:10px;color:var(--text3);flex:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.main-info-btn{font-size:11px;color:var(--text3);padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.main-info-btn:hover{color:var(--accent);border-color:var(--accent);}
+.main-chevron{font-size:11px;color:var(--text3);transition:transform .2s;flex-shrink:0;}
+.main-chevron.open{transform:rotate(90deg);}
+.main-body{display:none;}
+.sub-section{border-top:1px solid var(--border);background:var(--bg2);}
+.sub-header{display:flex;align-items:center;gap:9px;padding:11px 16px 11px 28px;cursor:pointer;user-select:none;}
+.sub-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.sub-name{font-weight:600;font-size:12px;flex:1;color:var(--text);}
+.sub-info-btn{font-size:10px;color:var(--text3);padding:2px 6px;border-radius:4px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.sub-info-btn:hover{color:var(--accent);border-color:var(--accent);}
+.sub-chevron{font-size:10px;color:var(--text3);transition:transform .2s;flex-shrink:0;}
+.sub-chevron.open{transform:rotate(90deg);}
+.sub-body{display:none;}
+.leaf-section{border-top:1px solid var(--border);background:var(--bg2);}
+.leaf-header{display:flex;align-items:center;gap:8px;padding:9px 16px 9px 44px;cursor:pointer;user-select:none;}
+.leaf-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.leaf-name{font-weight:500;font-size:11px;flex:1;color:var(--text2);}
+.leaf-info-btn{font-size:9px;color:var(--text3);padding:2px 5px;border-radius:3px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.leaf-info-btn:hover{color:var(--accent);border-color:var(--accent);}
+.leaf-chevron{font-size:10px;color:var(--text3);transition:transform .2s;flex-shrink:0;}
+.leaf-chevron.open{transform:rotate(90deg);}
+.leaf-body{display:none;padding:4px 8px 4px 60px;border-top:1px solid var(--border);}
+.leaf-node-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;cursor:pointer;font-size:11px;transition:background .1s;}
+.leaf-node-row:hover{background:var(--bg3);}
+
+/* ── BRANCH DETAIL MODAL ── */
+#modal-branch-detail .modal{max-width:500px;}
+.bd-tier{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+.bd-desc{font-size:13px;color:var(--text);line-height:1.7;padding:10px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);}
+
+/* ── JOURNAL / LOG SYSTEM ── */
+.log-add-row{display:flex;gap:5px;padding:4px 0 2px;}
+.log-add-row input{flex:1;background:var(--bg3);border:1px dashed var(--border2);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none;font-family:'Noto Sans TC',sans-serif;}
+.log-add-row input:focus{border-color:var(--accent);}
+.log-add-row button{padding:5px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;transition:all .12s;font-family:'Noto Sans TC',sans-serif;}
+.log-add-row button:hover{border-color:var(--accent);color:var(--accent);}
+
+/* folder mode */
+.main-desc-hidden{display:none!important;}
+.tier-log-btn{font-size:10px;color:var(--text3);padding:2px 7px;border-radius:5px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.tier-log-btn:hover{color:var(--green);border-color:var(--green);}
+#modal-journal .modal{width:500px;}
+.jm-tier-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;}
+
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+
+/* ── STATUS SYSTEM ── */
+.status-bar{display:flex;align-items:center;gap:5px;padding:7px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.status-bar-label{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);margin-right:3px;}
+.status-btn{display:flex;align-items:center;gap:3px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:none;color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s;font-family:'Noto Sans TC',sans-serif;}
+.status-btn:hover{border-color:var(--border);color:var(--text);}
+.status-btn.active-pending{background:rgba(74,158,255,.12);border-color:rgba(74,158,255,.4);color:var(--accent);}
+.status-btn.active-warning{background:rgba(255,159,67,.12);border-color:rgba(255,159,67,.4);color:var(--orange);}
+.status-btn.active-failed{background:rgba(255,77,106,.12);border-color:rgba(255,77,106,.4);color:var(--red);}
+.status-btn.active-done{background:rgba(61,220,132,.12);border-color:rgba(61,220,132,.4);color:var(--green);}
+.status-clear{padding:3px 6px;border-radius:5px;border:1px dashed var(--border2);background:none;color:var(--text3);font-size:10px;cursor:pointer;transition:all .15s;}
+.status-clear:hover{border-color:var(--red);color:var(--red);}
+
+/* legend status counts */
+.legend-counts{display:flex;gap:4px;margin-left:4px;}
+.lc{font-size:9px;padding:1px 5px;border-radius:8px;cursor:pointer;transition:all .15s;font-weight:700;font-family:'JetBrains Mono',monospace;}
+.lc:hover{opacity:.75;transform:scale(1.08);}
+.lc-pending{background:rgba(74,158,255,.12);color:var(--accent);border:1px solid rgba(74,158,255,.3);}
+.lc-warning{background:rgba(255,159,67,.12);color:var(--orange);border:1px solid rgba(255,159,67,.3);}
+.lc-failed{background:rgba(255,77,106,.12);color:var(--red);border:1px solid rgba(255,77,106,.3);}
+.lc-done{background:rgba(61,220,132,.12);color:var(--green);border:1px solid rgba(61,220,132,.3);}
+.lc.dim{opacity:.25;pointer-events:none;}
+
+/* status popout panel */
+#status-popout{position:absolute;z-index:150;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px;min-width:200px;max-width:260px;box-shadow:0 8px 28px rgba(0,0,0,.55);display:none;}
+#status-popout.open{display:block;}
+.sp-header{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
+.sp-title{font-size:11px;font-weight:700;color:var(--text);}
+.sp-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;margin-left:auto;line-height:1;}
+.sp-close:hover{color:var(--text);}
+.sp-item{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:5px;cursor:pointer;font-size:11px;transition:background .1s;}
+.sp-item:hover{background:var(--bg3);}
+.sp-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.sp-name{flex:1;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sp-empty{font-size:10px;color:var(--text3);padding:4px 7px;}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <button id="theme-btn" onclick="openThemeModal()" title="查看／編輯主題">DevLog</button>
+  <div class="tsep"></div>
+  <input id="project-name" value="DevLog" title="點擊編輯"/>
+  <div class="spacer"></div>
+  <div id="search-wrap">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input id="search-input" placeholder="搜尋…"/>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <div id="view-toggle">
+      <button class="vt-btn active" id="vt-pie" onclick="setViewMode('pie')">⬤ 圓餅</button>
+      <button class="vt-btn" id="vt-folder" onclick="setViewMode('folder')">📁 資料夾</button>
+    </div>
+  </div>
+  <div class="tsep"></div>
+  <button class="btn" id="manage-sector-btn" onclick="openManageSectors()">⊞ 版塊</button>
+  <div class="tsep"></div>
+  <button class="btn" id="tb-home" onclick="goHome()" title="回首頁">⌂ 首頁</button>
+  <button class="btn" id="tb-prev" onclick="navPrev()" title="上一頁">◀</button>
+  <button class="btn" id="tb-next" onclick="navNext()" title="下一頁">▶</button>
+  <div class="tsep"></div>
+  <button class="btn primary" onclick="openAddNode()">＋ 新日誌</button>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- PIE VIEW -->
+  <div id="canvas-wrap">
+    <canvas id="graph-canvas"></canvas>
+    <div id="branch-legend"></div>
+    <div id="status-popout">
+      <div class="sp-header">
+        <div id="sp-indicator" style="width:8px;height:8px;border-radius:50%;"></div>
+        <div id="sp-title" class="sp-title"></div>
+        <button class="sp-close" onclick="closePopout()">×</button>
+      </div>
+      <div id="sp-list"></div>
+    </div>
+    <div id="canvas-controls">
+      <button class="cc-btn" onclick="zoom(1.2)">＋</button>
+      <button class="cc-btn" onclick="zoom(0.83)">－</button>
+      <button class="cc-btn" onclick="resetView()">⊙</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+
+  <!-- FOLDER VIEW -->
+  <div id="folder-view"></div>
+
+  <!-- FOLDER PANEL BACKDROP -->
+  <div id="folder-backdrop" onclick="closePanel()"></div>
+
+  <!-- PANEL -->
+  <div id="panel">
+    <div id="panel-inner">
+      <div id="panel-header">
+        <div id="panel-color-dot"></div>
+        <div id="panel-title-wrap">
+          <input id="panel-title" placeholder="節點標題…"/>
+          <div id="panel-meta"></div>
+        </div>
+        <button id="panel-close" onclick="closePanel()">×</button>
+      </div>
+      <!-- STATUS BAR -->
+      <div class="status-bar" id="node-status-bar">
+        <span class="status-bar-label">狀態</span>
+        <button class="status-btn" id="sb-pending" onclick="setNodeStatus('pending')" title="未決／偽版塊">⊡ 未決</button>
+        <button class="status-btn" id="sb-warning" onclick="setNodeStatus('warning')" title="曾成功但現有問題">！警告</button>
+        <button class="status-btn" id="sb-failed"  onclick="setNodeStatus('failed')"  title="確認失敗死路">✗ 失敗</button>
+        <button class="status-btn" id="sb-done"    onclick="setNodeStatus('done')"    title="完成封裝">✓ 完成</button>
+        <!-- 未決即為預設值，無需額外清除按鈕 -->
+      </div>
+      <div id="panel-body">
+        <div>
+          <div class="fl">所屬版塊</div>
+          <select id="branch-select" class="fi" onchange="onFieldChange()"></select>
+        </div>
+        <div>
+          <div class="fl">目標 <span style="font-size:9px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none;">這次要幹嘛（一句話）</span></div>
+          <textarea id="f-objective" class="fta" placeholder="這次操作的具體目標是什麼？" oninput="onFieldChange()" style="min-height:48px;"></textarea>
+        </div>
+        <div>
+          <div class="fl">行動 <span style="font-size:9px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none;">做了什麼</span></div>
+          <textarea id="f-action" class="fta" placeholder="具體執行了哪些操作或修改？" oninput="onFieldChange()" style="min-height:64px;"></textarea>
+        </div>
+        <div>
+          <div class="fl">結果 <span style="font-size:9px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none;">量化優先</span></div>
+          <textarea id="f-result" class="fta" placeholder="結果是什麼？效能數字、通過/失敗、副作用…" oninput="onFieldChange()" style="min-height:52px;"></textarea>
+        </div>
+        <div>
+          <div class="fl" style="display:flex;align-items:center;gap:6px;">失敗原因 <span style="font-size:9px;color:var(--red);font-weight:normal;letter-spacing:0;text-transform:none;">AI 最依賴此欄防止重蹈覆轍</span></div>
+          <textarea id="f-failure" class="fta" placeholder="為什麼失敗？踩了什麼坑？填空代表成功。" oninput="onFieldChange()" style="min-height:52px;border-color:rgba(255,77,106,.2);"></textarea>
+        </div>
+        <div>
+          <div class="fl" style="display:flex;align-items:center;gap:6px;">下一步 <span style="font-size:9px;color:var(--accent);font-weight:normal;letter-spacing:0;text-transform:none;">AI 交接入口</span></div>
+          <textarea id="f-next" class="fta mono" placeholder="下一個 AI 接手時應該做什麼？" oninput="onFieldChange()" style="min-height:52px;border-color:rgba(74,158,255,.2);"></textarea>
+        </div>
+        <div>
+          <div class="fl">標籤</div>
+          <div id="tags-wrap"><input id="tag-input" placeholder="＋ 新增" onkeydown="onTagKey(event)"/></div>
+        </div>
+        <div>
+          <div class="fl">附件圖片</div>
+          <div id="images-wrap">
+            <div class="img-add" onclick="document.getElementById('img-input').click()">＋</div>
+            <input id="img-input" type="file" accept="image/*" multiple style="display:none" onchange="handleImgUpload(event)"/>
+          </div>
+        </div>
+        <div>
+          <div class="fl">附件檔案</div>
+          <div id="files-wrap">
+            <div class="file-add" onclick="document.getElementById('file-input').click()">＋ 附加檔案</div>
+            <input id="file-input" type="file" multiple style="display:none" onchange="handleFileUpload(event)"/>
+          </div>
+        </div>
+        <div>
+          <div class="fl" style="display:flex;align-items:center;gap:7px;">地雷記錄<span style="font-size:10px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none">節點上會標示 ✕</span></div>
+          <div id="fail-list"></div>
+          <div class="fail-row">
+            <input id="fail-input" placeholder="這條路走不通——原因是…" onkeydown="if(event.key==='Enter')addFail()"/>
+            <button class="btn danger" onclick="addFail()" style="padding:5px 9px;">標記</button>
+          </div>
+        </div>
+        <!-- 文檔複製（inline，合併版）-->
+        <div id="docopy-wrap">
+          <div id="docopy-header" onclick="toggleDocopy()">
+            <span style="font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);">文檔複製</span>
+            <div style="flex:1;"></div>
+            <button class="dc-tag" style="border:none;background:none;padding:2px 6px;" onclick="event.stopPropagation();dcToggleInsertPanel()" title="插入">＋ 插入</button>
+            <button class="dc-tag" style="border:none;background:none;padding:2px 6px;" onclick="event.stopPropagation();toggleDocopyTpl()" title="模板">📋 模板</button>
+            <span id="docopy-chevron" style="font-size:10px;color:var(--text3);margin-left:4px;transition:transform .2s;">▶</span>
+          </div>
+          <div id="docopy-body">
+            <!-- 插入面板：節點 + 欄位（直接填充）+ 佔位標籤 -->
+            <div id="docopy-insert-panel" style="display:none;background:var(--bg2);border:1px solid var(--border2);border-radius:7px;padding:9px;flex-direction:column;gap:7px;">
+              <div>
+                <div style="font-size:9px;color:var(--text3);letter-spacing:1px;font-weight:700;margin-bottom:5px;">插入節點全文（歷史節點）</div>
+                <div id="dc-node-tags" style="display:flex;flex-wrap:wrap;gap:4px;min-height:20px;"></div>
+              </div>
+              <div>
+                <div style="font-size:9px;color:var(--text3);letter-spacing:1px;font-weight:700;margin-bottom:5px;">插入當前節點欄位內容</div>
+                <div id="dc-field-tags" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+              </div>
+              <div>
+                <div style="font-size:9px;color:var(--text3);letter-spacing:1px;font-weight:700;margin-bottom:5px;">插入佔位標籤（匯出時替換）</div>
+                <div id="dc-placeholder-tags" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+              </div>
+            </div>
+            <!-- 模板面板 -->
+            <div id="docopy-tpl-panel" style="display:none;background:var(--bg2);border:1px solid var(--border2);border-radius:7px;padding:9px;">
+              <div style="font-size:10px;color:var(--text3);letter-spacing:1px;margin-bottom:6px;font-weight:700;">模板（只存佈局，不存實際內容）</div>
+              <div class="dc-tpl-grid" id="docopy-tpl-grid"></div>
+              <div style="display:flex;gap:5px;margin-top:8px;">
+                <button class="btn" style="flex:1;font-size:10px;padding:4px 0;" onclick="dcSaveTpl()">💾 儲存</button>
+                <button class="btn" style="flex:1;font-size:10px;padding:4px 0;" onclick="toggleDocopyTpl()">收起</button>
+              </div>
+            </div>
+            <!-- 編輯區 -->
+            <textarea id="docopy-compose" placeholder="在這裡撰寫內容。點「＋ 插入」可插入節點全文、欄位內容、或 [佔位標籤]。匯出時佔位標籤會替換為實際欄位內容。"></textarea>
+            <div id="docopy-char">0 字</div>
+            <div style="display:flex;gap:5px;">
+              <button class="btn" style="flex:1;font-size:11px;" onclick="dcClear()">清空</button>
+              <button class="btn primary" style="flex:1;font-size:11px;" id="docopy-export-btn" onclick="dcExport()">匯出並複製</button>
+            </div>
+          </div>
+        </div>
+        <button class="add-child-btn" onclick="addChildFromPanel()">＋ 在此節點下建立子日誌</button>
+      </div>
+      <div id="panel-log-status" style="display:none;padding:6px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--text2);display:none;align-items:center;gap:6px;flex-shrink:0;">
+        <span id="panel-log-badge"></span>
+        <div style="flex:1;"></div>
+        <button class="btn" id="panel-add-secondary-btn" style="font-size:10px;padding:3px 8px;display:none;" onclick="addSecondaryLog()">＋ 副日誌</button>
+        <button class="btn" id="panel-promote-btn" style="font-size:10px;padding:3px 8px;display:none;border-color:var(--gold);color:var(--gold);" onclick="promoteToPrimary()">⬆ 轉正</button>
+      </div>
+      <div id="panel-footer">
+        <button class="btn" onclick="startMove()">移動</button>
+        <button class="btn danger" onclick="deleteSelected()">刪除</button>
+      </div>
+      <div id="panel-nav">
+        <button class="nav-btn home" onclick="goHome()">⌂ 首頁</button>
+        <div style="flex:1"></div>
+        <button class="nav-btn" id="nav-prev" onclick="navPrev()">◀</button>
+        <button class="nav-btn" id="nav-next" onclick="navNext()">▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+  <div class="ctx-item" onclick="ctxAddChild()">＋ 新增子日誌</div>
+  <div class="ctx-item" onclick="ctxMove()">↔ 移動節點</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxEdit()">✎ 編輯</div>
+  <div class="ctx-item danger" onclick="ctxDelete()">✕ 刪除</div>
+</div>
+
+<!-- ADD NODE MODAL -->
+<!-- PROMPT MODAL (取代原生 prompt()) -->
+<div class="modal-overlay" id="modal-prompt">
+  <div class="modal" style="width:340px;gap:12px;">
+    <h3 id="modal-prompt-title">輸入標題</h3>
+    <input class="fi" id="modal-prompt-input" placeholder="" style="margin-bottom:4px;"
+      onkeydown="if(event.key==='Enter')_promptConfirm()"/>
+    <div class="modal-btns">
+      <button class="btn" onclick="_promptCancel()">取消</button>
+      <button class="btn primary" onclick="_promptConfirm()">確認</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-node">
+  <div class="modal">
+    <h3>新增日誌節點</h3>
+    <div class="fl">標題</div>
+    <input class="fi" id="new-node-title" placeholder="這次更新的主軸" style="margin-bottom:10px;"/>
+    <div class="fl">所屬版塊（必選）</div>
+    <select class="fi" id="new-node-branch" style="margin-bottom:4px;"></select>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal('modal-node')">取消</button>
+      <button class="btn primary" onclick="confirmAddNode()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- BRANCH DETAIL MODAL -->
+<div class="modal-overlay" id="modal-branch-detail">
+  <div class="modal" style="width:480px;gap:10px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <div id="bd-dot" style="width:14px;height:14px;border-radius:50%;flex-shrink:0;margin-top:3px;"></div>
+      <div style="flex:1;">
+        <div id="bd-tier" class="bd-tier"></div>
+        <div id="bd-name" style="font-size:16px;font-weight:700;margin-bottom:10px;"></div>
+        <!-- Definition -->
+        <div style="margin-bottom:8px;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">DEFINITION</div>
+          <div id="bd-definition" style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap;background:var(--bg3);border-radius:6px;padding:8px 10px;border:1px solid var(--border);"></div>
+        </div>
+        <!-- I/O (L2/L3 only) -->
+        <div id="bd-io-section" style="display:none;margin-bottom:8px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">INPUT</div>
+              <div id="bd-inputs" style="font-size:11px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg3);border-radius:6px;padding:7px 9px;border:1px solid var(--border);min-height:40px;font-family:'JetBrains Mono',monospace;"></div>
+            </div>
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">OUTPUT</div>
+              <div id="bd-outputs" style="font-size:11px;color:var(--text2);line-height:1.7;white-space:pre-wrap;background:var(--bg3);border-radius:6px;padding:7px 9px;border:1px solid var(--border);min-height:40px;font-family:'JetBrains Mono',monospace;"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Constraints -->
+        <div id="bd-constraints-section" style="margin-bottom:4px;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;">CONSTRAINTS</div>
+          <div id="bd-constraints" style="font-size:11px;color:var(--orange);line-height:1.7;white-space:pre-wrap;background:rgba(255,159,67,.05);border-radius:6px;padding:7px 9px;border:1px solid rgba(255,159,67,.2);font-family:'JetBrains Mono',monospace;min-height:32px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" id="bd-edit-btn">✎ 編輯</button>
+      <button class="btn" id="bd-open-log-btn">📋 開啟主日誌</button>
+      <button class="btn" onclick="closeModal('modal-branch-detail')">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- JOURNAL MODAL -->
+<div class="modal-overlay" id="modal-journal">
+  <div class="modal" id="modal-journal-inner" style="width:500px;max-height:80vh;overflow:hidden;padding-bottom:0;">
+    <div style="display:flex;align-items:center;gap:9px;flex-shrink:0;">
+      <div id="jm-dot" style="width:11px;height:11px;border-radius:50%;flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div id="jm-name" style="font-size:14px;font-weight:700;"></div>
+        <div id="jm-tier" class="jm-tier-label"></div>
+      </div>
+      <button class="btn" onclick="closeModal('modal-journal')" style="padding:4px 9px;">×</button>
+    </div>
+    <div id="jm-body" style="flex:1;min-height:100px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;padding-right:2px;margin:8px 0;"></div>
+    <div class="log-add-row" id="jm-add-row" style="flex-shrink:0;padding-bottom:4px;">
+      <input id="jm-new-title" placeholder="新日誌標題…" onkeydown="if(event.key==='Enter')jmAddLog()"/>
+      <button onclick="jmAddLog()">＋ 新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE NEW BRANCHES MODAL -->
+<div class="modal-overlay" id="modal-manage-new">
+  <div class="modal" style="width:540px;">
+    <h3>⊞ 三層版塊管理</h3>
+    <div id="manage-new-body" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="modal-btns" style="margin-top:8px;">
+      <button class="btn" onclick="closeModal('modal-manage-new')">關閉</button>
+      <button class="btn primary" onclick="addMainBranch()">＋ 新增主版塊</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT BRANCH MODAL -->
+<div class="modal-overlay" id="modal-edit-branch">
+  <div class="modal" style="width:460px;">
+    <h3 id="eb-title">新增版塊</h3>
+    <div class="fl">名稱</div>
+    <input class="fi" id="eb-name" placeholder="版塊名稱" style="margin-bottom:8px;"/>
+    <div class="fl">定義 <span style="font-size:9px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none;">負責X ／ 不負責Y（一句話）</span></div>
+    <textarea class="fta" id="eb-definition" placeholder="負責：…&#10;不負責：…" style="min-height:56px;margin-bottom:8px;"></textarea>
+    <!-- L2/L3 only: I/O -->
+    <div id="eb-io-wrap" style="display:none;">
+      <div class="fl" style="margin-bottom:4px;">Input <span style="font-size:9px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none;">上游給什麼（每行一條）</span></div>
+      <textarea class="fta" id="eb-inputs" placeholder="- 原始地圖數據&#10;- 玩家視野範圍" style="min-height:52px;margin-bottom:8px;font-family:'JetBrains Mono',monospace;font-size:11px;"></textarea>
+      <div class="fl" style="margin-bottom:4px;">Output <span style="font-size:9px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none;">產出給誰（每行一條）</span></div>
+      <textarea class="fta" id="eb-outputs" placeholder="- 可渲染 chunk&#10;- LOD 分級資料" style="min-height:52px;margin-bottom:8px;font-family:'JetBrains Mono',monospace;font-size:11px;"></textarea>
+    </div>
+    <div class="fl" style="margin-bottom:4px;">Constraints <span id="eb-constraints-hint" style="font-size:9px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none;">（每行一條，必須可測試）</span></div>
+    <textarea class="fta" id="eb-constraints" placeholder="- 單幀運算 < 16ms&#10;- 禁止全圖掃描" style="min-height:52px;margin-bottom:8px;font-family:'JetBrains Mono',monospace;font-size:11px;"></textarea>
+    <div class="fl">顏色</div>
+    <div id="eb-swatches" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal('modal-edit-branch')">取消</button>
+      <button class="btn primary" id="eb-confirm" onclick="confirmEditBranch()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- THEME MODAL -->
+<div class="modal-overlay" id="modal-theme">
+  <div class="modal" style="width:560px;">
+    <h3><span class="theme-crown">◎</span> 主題 <span class="theme-badge">源頭節點</span></h3>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div class="theme-field-label">專案名稱</div>
+      <input id="theme-project-name" placeholder="專案名稱…" oninput="onThemeChange()"/>
+    </div>
+    <div class="theme-fields-grid">
+      <div>
+        <div class="theme-field-label">引擎／技術棧</div>
+        <textarea id="theme-engine" class="theme-fta" placeholder="使用的引擎、語言、框架…" oninput="onThemeChange()" style="min-height:52px;"></textarea>
+      </div>
+      <div>
+        <div class="theme-field-label">核心玩法</div>
+        <textarea id="theme-gameplay" class="theme-fta" placeholder="這個專案的核心機制與體驗目標…" oninput="onThemeChange()" style="min-height:72px;"></textarea>
+      </div>
+      <div>
+        <div class="theme-field-label">用戶端／平台</div>
+        <textarea id="theme-platform" class="theme-fta" placeholder="目標平台、裝置、瀏覽器需求…" oninput="onThemeChange()" style="min-height:52px;"></textarea>
+      </div>
+      <div>
+        <div class="theme-field-label">其他限制</div>
+        <textarea id="theme-constraints" class="theme-fta" placeholder="效能上限、相容性、授權、外部 API…" oninput="onThemeChange()" style="min-height:52px;"></textarea>
+      </div>
+      <div>
+        <div class="theme-field-label">注意事項</div>
+        <textarea id="theme-notes" class="theme-fta mono" placeholder="踩過的坑、重要決策、給未來自己的提醒…" oninput="onThemeChange()" style="min-height:72px;"></textarea>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal('modal-theme')">關閉</button>
+      <button class="btn primary" onclick="saveTheme()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" onclick="closeLightbox()"><img id="lb-img" src=""/></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+// 色彩系統 v3
+// L1 : 10 大色域（色輪等距 36°，彼此最大對比）
+// L2 : 每域 10 個鄰近色（色相 ±18° 展開，色輪連續不重疊）
+// L3 : 每色 8 個深淺（固定色相，明度 0.14→0.70 線性梯度）
+// ═══════════════════════════════════════════════════════
+
+const L1_COLORS = [
+  {id:'red',    name:'紅',   hue:  0, hex:'#e42525'},
+  {id:'orange', name:'橙',   hue: 36, hex:'#e89417'},
+  {id:'yellow', name:'黃',   hue: 72, hex:'#bce029'},
+  {id:'lime',   name:'草綠', hue:108, hex:'#40c11f'},
+  {id:'green',  name:'綠',   hue:144, hex:'#20b65c'},
+  {id:'cyan',   name:'青',   hue:180, hex:'#1fc1c1'},
+  {id:'azure',  name:'天藍', hue:216, hex:'#1b67da'},
+  {id:'blue',   name:'藍',   hue:252, hex:'#4219e6'},
+  {id:'violet', name:'紫',   hue:288, hex:'#bc29e0'},
+  {id:'rose',   name:'玫紅', hue:324, hex:'#e31c93'},
+];
+
+// L2: 每個 L1 色域的 10 個同族鄰近色
+// 策略：色相帶從 L1 錨點往兩側各展開 ~18°，涵蓋粉紅→紅→橘紅這類色相族群
+// 相鄰色系之間色相連續，同族10色彼此差異小、整體對比同族外的顏色大
+const L2_VARIANTS = {
+  // 紅族：粉紅→紅→橘紅（hue 342°→18°）
+  red:    ['#e0297a','#e02555','#e42525','#e43a25','#e45025','#e06e2a','#cc5522','#b84422','#e8403a','#e85050'],
+  // 橙族：橘紅→橙→金橙（hue 18°→54°）
+  orange: ['#e86025','#e87825','#e89417','#e8a817','#e8c017','#d4a012','#c89010','#e8a030','#e8b040','#e8c050'],
+  // 黃族：黃綠→黃→黃橙（hue 54°→90°）
+  yellow: ['#c8e029','#bce029','#a8d820','#90cc18','#d4e829','#e0e029','#e8e040','#d8d820','#c0cc18','#b0c410'],
+  // 草綠族：黃綠→草綠→翠綠（hue 90°→126°）
+  lime:   ['#80c41f','#60c21f','#40c11f','#28c01f','#1cc130','#1cb840','#20a820','#30b820','#50c020','#70c820'],
+  // 綠族：翠綠→綠→青綠（hue 126°→162°）
+  green:  ['#20b640','#20b655','#20b65c','#20b670','#20b685','#20aa70','#18a060','#20c068','#28cc74','#30d880'],
+  // 青族：青綠→青→藍青（hue 162°→198°）
+  cyan:   ['#1fc190','#1fc1a8','#1fc1c1','#1fb0c8','#1fa0cc','#18b0b8','#10a0a8','#20c8c8','#28d4d0','#30d8dc'],
+  // 天藍族：藍青→天藍→藍（hue 198°→234°）
+  azure:  ['#1b90da','#1b78da','#1b67da','#1b55da','#1b40da','#2050d0','#1840c0','#2860e0','#1870e8','#1058d0'],
+  // 藍族：紫藍→藍→藍紫（hue 234°→270°）
+  blue:   ['#3019e6','#4019e6','#4219e6','#5019e6','#6019e6','#2810d8','#3818e0','#5828e8','#6830e8','#7838ec'],
+  // 紫族：藍紫→紫→紫紅（hue 270°→306°）
+  violet: ['#9029e0','#a029e0','#bc29e0','#cc29e0','#d829d8','#a820d0','#b828e0','#c830e8','#d030e0','#d828cc'],
+  // 玫紅族：紫紅→玫紅→粉紅（hue 306°→342°）
+  rose:   ['#e31ca8','#e31c93','#e31c78','#e31c60','#e03070','#d81888','#cc1080','#e82888','#e83898','#e848a8'],
+};
+
+// L3: 8 個深淺階（固定色相 = L1 錨點色相，明度 0.14→0.70）
+const L3_SHADES = {
+  red: ['#400808','#5f0c0c','#7f1010','#a31414','#c81919','#e42525','#e94949','#ee7777'],
+  orange: ['#412a06','#613e0a','#82530d','#a76b11','#cc8314','#e99920','#edaa45','#f1bf74'],
+  yellow: ['#343e09','#4e5e0d','#687d12','#85a117','#a3c41c','#bce029','#c7e64c','#d5ec79'],
+  lime: ['#143d0a','#1e5c0f','#297b14','#349e1a','#40c11f','#50dd2c','#6de250','#91ea7b'],
+  green: ['#0b3d1f','#105b2e','#15793d','#1c9c4f','#22bf60','#2fda73','#52e08b','#7de8a8'],
+  cyan: ['#0a3d3d','#0f5c5c','#147b7b','#1a9e9e','#1fc1c1','#2cdddd','#50e2e2','#7beaea'],
+  azure: ['#081e40','#0c2d5f','#103c7f','#144da3','#195fc8','#2572e4','#4989e9','#77a7ee'],
+  blue: ['#130740','#1c0b60','#250e81','#3012a5','#3a16ca','#4a23e7','#6847eb','#8e75f0'],
+  violet: ['#34093e','#4e0d5e','#68127d','#8517a1','#a31cc4','#bc29e0','#c74ce6','#d579ec'],
+  rose: ['#400829','#5f0c3e','#7f1053','#a3146a','#c81982','#e42598','#e949a9','#ee77be'],
+};
+
+// Legacy COLOR_DB — 保持舊存檔相容
+const COLOR_DB = L1_COLORS.map(c=>({
+  name: c.name,
+  L1: c.hex,
+  L2: (L2_VARIANTS[c.id]||[c.hex])[1] || c.hex,
+  L3: (L3_SHADES[c.id]||[c.hex])[5]   || c.hex,
+}));
+
+function getColorL(colorIdx, layer){
+  const c = L1_COLORS[colorIdx % L1_COLORS.length];
+  if(layer===1) return c.hex;
+  if(layer===2) return (L2_VARIANTS[c.id]||[c.hex])[1] || c.hex;
+  return (L3_SHADES[c.id]||[c.hex])[4] || c.hex;
+}
+function findColorIdx(hex){
+  if(!hex) return 0;
+  const h = hex.toLowerCase();
+  for(let i=0; i<L1_COLORS.length; i++){
+    const c = L1_COLORS[i];
+    if(c.hex === h) return i;
+    if((L2_VARIANTS[c.id]||[]).includes(h)) return i;
+    if((L3_SHADES[c.id]||[]).includes(h)) return i;
+  }
+  return 0;
+}
+
+const PALETTE=['#e42525','#e89417','#bce029','#40c11f','#20b65c','#1fc1c1','#1b67da','#4219e6','#bc29e0','#e31c93']; // L1 v3 10色
+const STORE_KEY='devlog_v10';
+
+// ═══════════════════════════════════
+// STATUS SYSTEM
+// ═══════════════════════════════════
+// status values: 'pending' | 'warning' | 'failed' | 'done'
+// 第四層（leafBranch 直屬子節點）：手動設定，必有值（預設 'pending'）
+// 第三層（subBranch primaryLog）：自動推導，唯讀
+// 圓餅圖統計只計第四層，第五層以下不統計
+const STATUS_META={
+  pending:{label:'⊡ 未決', cls:'active-pending', color:'var(--accent)',    lcCls:'lc-pending'},
+  warning:{label:'！警告', cls:'active-warning', color:'var(--orange)',    lcCls:'lc-warning'},
+  failed: {label:'✗ 失敗',  cls:'active-failed',  color:'var(--red)',      lcCls:'lc-failed'},
+  done:   {label:'✓ 完成',  cls:'active-done',    color:'var(--green)',    lcCls:'lc-done'},
+};
+
+// 計算節點在樹中的深度（root=0）
+function _nodeDepth(nd){
+  let depth=0,cur=nd;
+  while(cur&&cur.parentId){cur=node(cur.parentId);depth++;}
+  return depth;
+}
+// 判斷某節點是否為「可設狀態節點」（depth>=4，非結構節點）
+// 包含第四層及所有子孫，狀態列對這些節點全部顯示
+function _isTier4(nd){
+  if(!nd||nd.isRoot||nd.isPrimaryLog||nd.isHiddenFolder||nd.isSecondaryLog)return false;
+  return _nodeDepth(nd)>=4;
+}
+
+// 判斷某節點是否為第三層（isPrimaryLog 且 depth===3）
+function _isTier3(nd){
+  if(!nd||!nd.isPrimaryLog)return false;
+  return _nodeDepth(nd)===3;
+}
+
+// 計算第三層節點的自動狀態（依其第四層子節點推導）
+function _deriveTier3Status(nd){
+  const leafIds=new Set((S.leafBranches||[]).filter(l=>l.subId===nd.branchId).map(l=>l.id));
+  const tier4=S.nodes.filter(n=>
+    !n.isRoot&&!n.isPrimaryLog&&!n.isHiddenFolder&&!n.isSecondaryLog&&
+    leafIds.has(n.branchId)
+  );
+  if(!tier4.length)return'pending';
+  const statuses=tier4.map(n=>n.status||'pending');
+  if(statuses.every(s=>s==='done'))return'done';
+  if(statuses.some(s=>s==='failed'||s==='warning'))return'warning';
+  return'pending';
+}
+
+// 取得節點的顯示狀態（第三層自動推導，其餘讀 nd.status）
+function getDisplayStatus(nd){
+  if(_isTier3(nd))return _deriveTier3Status(nd);
+  return nd.status||'pending';
+}
+
+function setNodeStatus(status){
+  if(!selectedId)return;
+  const nd=node(selectedId);if(!nd)return;
+  if(!_isTier4(nd))return;  // 只有第四層可手動設定
+  nd.status=status||'pending';
+  save();
+  _refreshStatusBar(nd);
+  renderLegend();
+  if(viewMode==='folder')renderFolderView();
+}
+
+function _refreshStatusBar(nd){
+  const bar=document.getElementById('node-status-bar');
+  if(!nd){
+    if(bar)bar.style.display='none';
+    return;
+  }
+  const isTier4=_isTier4(nd);
+  // 狀態列只在第四層顯示；第三層以上唯讀不顯示
+  if(bar)bar.style.display=isTier4?'flex':'none';
+  // 建立子日誌按鈕：結構節點以外都可建子，永遠顯示
+  const addBtn=document.querySelector('.add-child-btn');
+  if(addBtn)addBtn.style.display='';
+  if(!isTier4)return;
+  const cur=nd.status||'pending';
+  ['pending','warning','failed','done'].forEach(s=>{
+    const b=document.getElementById('sb-'+s);if(!b)return;
+    Object.values(STATUS_META).forEach(m=>b.classList.remove(m.cls));
+    if(cur===s)b.classList.add(STATUS_META[s].cls);
+  });
+}
+
+// 取得某主版塊下的狀態計數
+// 只統計第四層節點，第五層以下不計
+function computeBranchStatusCounts(mainBranchId){
+  const counts={pending:0,warning:0,failed:0,done:0};
+  const subIds=new Set((S.subBranches||[]).filter(s=>s.mainId===mainBranchId).map(s=>s.id));
+  const leafIds=new Set((S.leafBranches||[]).filter(l=>subIds.has(l.subId)).map(l=>l.id));
+  const tier4=S.nodes.filter(n=>
+    !n.isRoot&&!n.isPrimaryLog&&!n.isHiddenFolder&&!n.isSecondaryLog&&
+    leafIds.has(n.branchId)
+  );
+  tier4.forEach(n=>{
+    const s=n.status||'pending';
+    counts[s]=(counts[s]||0)+1;
+  });
+  return counts;
+}
+
+// ── Popout 狀態 ──
+let _popoutMainId=null,_popoutStatus=null;
+
+function openStatusPopout(mainBranchId, status, triggerEl){
+  // 如果點同一個就關閉
+  if(_popoutMainId===mainBranchId&&_popoutStatus===status){
+    closePopout();return;
+  }
+  _popoutMainId=mainBranchId;
+  _popoutStatus=status;
+
+  const m=STATUS_META[status];
+  const branch=(S.mainBranches||[]).find(b=>b.id===mainBranchId);
+
+  // 只收集第四層節點（不統計第五層以下）
+  const subIds=new Set((S.subBranches||[]).filter(s=>s.mainId===mainBranchId).map(s=>s.id));
+  const leafIds=new Set((S.leafBranches||[]).filter(l=>subIds.has(l.subId)).map(l=>l.id));
+  const tier4=S.nodes.filter(n=>
+    !n.isRoot&&!n.isPrimaryLog&&!n.isHiddenFolder&&!n.isSecondaryLog&&
+    leafIds.has(n.branchId)
+  );
+  const matches=tier4.filter(n=>(n.status||'pending')===status);
+
+  const pop=document.getElementById('status-popout');
+  document.getElementById('sp-indicator').style.background=m.color;
+  document.getElementById('sp-title').textContent=(branch?branch.name.replace(/^[一二三四五六七八九十]+[.．、\s]*/,'')+' · ':'')+m.label;
+
+  const col=branch?.color||'#6b7a96';
+  document.getElementById('sp-list').innerHTML=matches.length
+    ?matches.map(n=>`<div class="sp-item" onclick="spOpenNode('${n.id}')">
+        <div class="sp-dot" style="background:${nodeColor(n)};"></div>
+        <div class="sp-name">${escHtml(n.title)}</div>
+      </div>`).join('')
+    :`<div class="sp-empty">（無符合節點）</div>`;
+
+  // 定位：貼近觸發元素
+  const legend=document.getElementById('branch-legend');
+  const lr=legend.getBoundingClientRect();
+  const wrap=document.getElementById('canvas-wrap');
+  const wr=wrap.getBoundingClientRect();
+  pop.style.left=(lr.right-wr.left+6)+'px';
+  // 垂直：嘗試對齊觸發元素，邊界保護
+  if(triggerEl){
+    const tr=triggerEl.getBoundingClientRect();
+    let top=tr.top-wr.top;
+    const maxTop=wr.height-pop.offsetHeight-10;
+    top=Math.max(6,Math.min(top,maxTop||top));
+    pop.style.top=top+'px';
+  } else {
+    pop.style.top='10px';
+  }
+  pop.classList.add('open');
+}
+
+function closePopout(){
+  _popoutMainId=null;_popoutStatus=null;
+  document.getElementById('status-popout').classList.remove('open');
+}
+
+function spOpenNode(id){
+  closePopout();
+  selectedId=id;openPanel(id);
+  if(viewMode==='folder')document.getElementById('folder-backdrop').classList.add('active');
+}
+
+
+let S={
+  projectName:'DevLog',
+  // 三層版塊結構：mainBranches > subBranches > leafBranches
+  // 色系分配：一=天藍azure(6), 二=綠green(4), 三=紫violet(8), 四=橙orange(1)
+  // L1=主版塊錨點, L2=次版塊鄰近色, L3=第三層深淺
+  mainBranches:[
+    {id:'m1',name:'一. 核心引擎與數據架構',colorIdx:6,colorId:'azure',color:'#1b67da',
+      definition:'負責所有底層數據存取、地圖格式、核心算法\n不負責渲染、UI、數值計算',
+      constraints:['所有資料存取必須可預測，禁止隱式全局狀態','地圖格式變更需版本號遞增','禁止在此層直接操作 DOM']},
+    {id:'m2',name:'二. 運算邏輯與數值系統',colorIdx:4,colorId:'green',color:'#20b65c',
+      definition:'負責所有數值計算、AI 決策邏輯、經濟模擬\n不負責資料存取、渲染、UI',
+      constraints:['所有公式必須有可驗證的數值範圍','AI 決策邏輯不可直接讀寫地圖原始數據','數值平衡調整不得影響算法結構']},
+    {id:'m3',name:'三. 表現層與交互介面',colorIdx:8,colorId:'violet',color:'#bc29e0',
+      definition:'負責玩家看到的所有畫面渲染與交互回饋\n不負責遊戲邏輯、數值計算、資料存取',
+      constraints:['行動裝置目標幀率 60fps','單幀渲染時間 < 16ms','禁止在渲染層執行遊戲邏輯']},
+    {id:'m4',name:'四. 工具鏈與生產流程',colorIdx:1,colorId:'orange',color:'#e89417',
+      definition:'負責內容生產工具與開發輔助流程\n不負責運行時遊戲邏輯',
+      constraints:['工具產出格式必須與遊戲引擎格式一致','工具崩潰不得影響遊戲本體','編輯器操作必須可撤銷']},
+  ],
+  subBranches:[
+    {id:'s1a',mainId:'m1',colorIdx:6,colorId:'azure',name:'A. 靜態數據庫',color:'#1b90da',
+      definition:'負責郡國座標、武將數值、行政區劃的靜態資料存放與讀取\n不負責動態計算、渲染、AI 邏輯',
+      inputs:['原始歷史數據（CSV / JSON 格式）'],
+      outputs:['結構化 jun 物件','武將屬性表','州郡縣層級樹'],
+      constraints:['格式確定後禁止不相容修改，需版本號管理','ID 排列依歷史順序，不可自動生成']},
+    {id:'s1b',mainId:'m1',colorIdx:6,colorId:'azure',name:'B. 物理與邏輯引擎',color:'#1b40da',
+      definition:'負責領土連接判斷、路徑計算、地圖二進制格式壓縮與讀取\n不負責渲染、UI、數值結算',
+      inputs:['玩家指令（移動目標）','地圖 bin 檔案'],
+      outputs:['frontline set（邊界集合）','移動路徑列表','junId 查找表'],
+      constraints:['frontline 傳播單回合 O(frontline) 不超過 O(15K)','禁止全圖像素掃描','路徑計算不得阻塞主線程超過 8ms']},
+    {id:'s2a',mainId:'m2',colorIdx:4,colorId:'green',name:'A. 戰鬥結算系統',color:'#20b640',
+      definition:'負責交戰雙方戰力計算與傷亡結算\n不負責 AI 決策、經濟模擬、渲染',
+      inputs:['交戰雙方兵力','將領屬性','地形係數'],
+      outputs:['戰力值','傷亡數量','潰散觸發狀態'],
+      constraints:['公式採乘積結構，禁止純加法','結果範圍 1000~50000 戰力','傷亡比例每回合不超過 15%']},
+    {id:'s2b',mainId:'m2',colorIdx:4,colorId:'green',name:'B. 戰略 AI 行為中心',color:'#20b670',
+      definition:'負責 AI 勢力的目標評估與行動決策\n不負責地圖資料存取、直接修改遊戲狀態',
+      inputs:['威脅值（鄰接敵軍兵力）','資源值（糧草 / 城池）','性格參數'],
+      outputs:['行動指令（擴張 / 防守 / 屯田）'],
+      constraints:['決策邏輯不得直接讀寫 bin 地圖','每回合 AI 計算 < 5ms','禁止全局最優解算法（玩家必須能打敗 AI）']},
+    {id:'s2c',mainId:'m2',colorIdx:4,colorId:'green',name:'C. 動態經濟系統',color:'#28cc74',
+      definition:'負責糧草生產、消耗、運輸損耗的動態模擬\n不負責戰鬥結算、AI 決策',
+      inputs:['城池產出數值','兵力消耗係數','補給路徑距離'],
+      outputs:['每回合糧草淨值','士氣修正值','補給斷絕狀態'],
+      constraints:['補給損耗為線性距離函數，禁止平方衰減','民心影響只在本城生效，不跨城傳播']},
+    {id:'s3a',mainId:'m3',colorIdx:8,colorId:'violet',name:'A. 圖形渲染管線',color:'#9029e0',
+      definition:'負責地圖像素顯示、勢力顏色渲染、視覺特效\n不負責點擊判斷邏輯、遊戲數值',
+      inputs:['junId 查找表','勢力歸屬 map','dirty rect 列表'],
+      outputs:['Canvas B 顯示幀'],
+      constraints:['只重繪 dirty rect，禁止全圖 clearRect','行動裝置 < 16ms / 幀','gamma 校正必須在載入時一次性處理']},
+    {id:'s3b',mainId:'m3',colorIdx:8,colorId:'violet',name:'B. 用戶體驗與交互',color:'#cc29e0',
+      definition:'負責觸控 / 滑鼠交互判斷與資訊視圖切換\n不負責渲染管線、遊戲邏輯',
+      inputs:['觸控 / 滑鼠座標','縮放倍率'],
+      outputs:['junId（點擊結果）','視圖層級（總覽 / 州 / 郡）'],
+      constraints:['點擊落空率 < 2%','標籤膨脹最大 2px（超出會覆蓋鄰郡）','長按判定 50ms 防誤觸']},
+    {id:'s4a',mainId:'m4',colorIdx:1,colorId:'orange',name:'A. 內容編輯器',color:'#e89417',
+      definition:'負責地圖邊界視覺化標記與劇本格式轉換工具\n不負責運行時遊戲邏輯',
+      inputs:['底圖圖片','CSV 劇本檔案'],
+      outputs:['郡國邊界 JSON 座標','遊戲可讀觸發器 JSON'],
+      constraints:['編輯器操作不影響遊戲本體','工具崩潰不破壞已存檔數據','輸出格式需與引擎 schema 版本對應']},
+  ],
+  leafBranches:[
+    {id:'l1a1',subId:'s1a',colorIdx:6,colorId:'azure',name:'1. 郡國座標系統',color:'#081e40',
+      definition:'定義 108 郡國的邊界點位與地理屬性\n不負責鄰接邏輯計算',
+      inputs:['原始邊界點位 CSV'],outputs:['jun 物件陣列（含座標、地理屬性）'],
+      constraints:['junId 依歷史順序排列','禁止自動生成 ID']},
+    {id:'l1a2',subId:'s1a',colorIdx:6,colorId:'azure',name:'2. 歷史武將庫',color:'#0c2d5f',
+      definition:'存儲武將的四維屬性與技能代碼\n不負責戰鬥計算',
+      inputs:['歷史武將 CSV'],outputs:['武將物件陣列（統武智政、特技、歷史關聯）'],
+      constraints:['屬性值範圍 1-100','特技代碼用字串陣列，方便 i18n']},
+    {id:'l1a3',subId:'s1a',colorIdx:6,colorId:'azure',name:'3. 行政區劃表',color:'#103c7f',
+      definition:'建立州—郡—縣三層層級與歸屬關係\n縣級暫不實作，預留欄位',
+      inputs:['史料行政區劃表'],outputs:['州郡縣層級樹 JSON'],
+      constraints:['最小領土單位為郡','縣級欄位預留但不計算']},
+    {id:'l1b1',subId:'s1b',colorIdx:6,colorId:'azure',name:'1. 領土連接算法',color:'#144da3',
+      definition:'判斷勢力邊境、封閉飛地（Enclave）、frontline 傳播\n不負責路徑計算',
+      inputs:['勢力歸屬 map','上回合 frontline set'],outputs:['更新後 frontline set','飛地列表'],
+      constraints:['單回合處理 O(frontline size) ≤ O(15K)','禁止全圖掃描']},
+    {id:'l1b2',subId:'s1b',colorIdx:6,colorId:'azure',name:'2. 路徑導航系統',color:'#195fc8',
+      definition:'計算軍隊在像素地圖上的移動路徑\n不負責移動指令的發出與執行',
+      inputs:['起點座標','目標座標','地形權重 map'],outputs:['最短路徑座標列表'],
+      constraints:['單次計算 < 8ms','不阻塞主線程']},
+    {id:'l1b3',subId:'s1b',colorIdx:6,colorId:'azure',name:'3. 二進制壓縮協議',color:'#2572e4',
+      definition:'地圖數據壓縮為 8-bit indexed PNG 格式，建立 ID 查找表\n不負責渲染',
+      inputs:['原始地圖 bin 檔'],outputs:['indexed PNG（每像素=junId）','junId 查找表陣列'],
+      constraints:['壓縮比 ≥ 20x','gamma 校正在載入時一次處理，查找表值不得偏移']},
+    {id:'l2a1',subId:'s2a',colorIdx:4,colorId:'green',name:'1. 戰力公式',color:'#0b3d1f',
+      definition:'計算交戰雙方的瞬時戰力值\n不負責傷亡分配',
+      inputs:['兵力','將領武力值','地形係數'],outputs:['戰力值（數字）'],
+      constraints:['乘積結構：兵力 × 將領修正 × 地形係數','結果範圍 1000~50000','地形係數 0.8~1.4']},
+    {id:'l2a2',subId:'s2a',colorIdx:4,colorId:'green',name:'2. 戰損模型',color:'#105b2e',
+      definition:'根據戰力差計算每回合傷亡與潰散觸發\n不負責撤退路徑',
+      inputs:['雙方戰力值','當前兵力'],outputs:['傷亡數量','潰散 boolean'],
+      constraints:['每回合傷亡 ≤ 15% 兵力','兵力低於 10% 觸發潰散','潰散保留 30% 兵力']},
+    {id:'l2b1',subId:'s2b',colorIdx:4,colorId:'green',name:'1. 目標評估器',color:'#15793d',
+      definition:'計算威脅值與資源值，輸出行動建議狀態\n不負責執行行動',
+      inputs:['鄰接敵軍兵力','糧草存量','城池數'],outputs:['行動狀態（擴張 / 防守 / 屯田）'],
+      constraints:['每回合計算 < 5ms','三個閾值：安全 / 警戒 / 危急']},
+    {id:'l2b2',subId:'s2b',colorIdx:4,colorId:'green',name:'2. 外交與性格模型',color:'#1c9c4f',
+      definition:'依性格參數調整切換閾值，模擬武將個性差異\n不負責外交事件觸發',
+      inputs:['行動狀態','性格參數（侵略性 / 保守性 / 冒險性）'],outputs:['修正後切換閾值'],
+      constraints:['性格參數範圍 0-1','禁止讓 AI 達到絕對最優解']},
+    {id:'l2c1',subId:'s2c',colorIdx:4,colorId:'green',name:'1. 物資流轉',color:'#22bf60',
+      definition:'計算糧草每回合產出、消耗、運輸損耗\n不負責士氣計算',
+      inputs:['城池產出值','兵力消耗係數','補給路徑距離'],outputs:['糧草淨值','補給斷絕 boolean'],
+      constraints:['損耗率 = 距離 × 0.05（線性，禁止平方）','補給半徑 5 格']},
+    {id:'l2c2',subId:'s2c',colorIdx:4,colorId:'green',name:'2. 民心與開發',color:'#2fda73',
+      definition:'計算內政指令對民心值和土地產出的影響\n只在本城生效',
+      inputs:['指令類型（屯田 / 連續戰鬥）','當前民心值'],outputs:['民心修正值','產出倍率'],
+      constraints:['民心值範圍 0-100','影響不跨城傳播']},
+    {id:'l3a1',subId:'s3a',colorIdx:8,colorId:'violet',name:'1. 像素地圖渲染',color:'#34093e',
+      definition:'依勢力歸屬渲染 9.6M 像素地圖顏色，只重繪 dirty rect\n不負責點擊判斷',
+      inputs:['勢力歸屬 map','dirty rect 列表'],outputs:['Canvas B 顯示幀'],
+      constraints:['禁止全圖 clearRect','行動裝置 < 16ms / 幀']},
+    {id:'l3a2',subId:'s3a',colorIdx:8,colorId:'violet',name:'2. 戰爭迷霧',color:'#4e0d5e',
+      definition:'BFS 計算玩家可見範圍，生成視野遮罩\n不負責渲染主地圖',
+      inputs:['己方城池列表','城池等級','將領駐守狀態'],outputs:['可見格子 Set','遮罩 Canvas'],
+      constraints:['視野半徑 = 城池等級 × 3 格','山地 -1 格','BFS 不超過 20ms']},
+    {id:'l3a3',subId:'s3a',colorIdx:8,colorId:'violet',name:'3. 特效管理器',color:'#68127d',
+      definition:'管理動畫隊列，確保視覺與邏輯同步\n不負責數值結算',
+      inputs:['動畫指令（類型、位置、duration）'],outputs:['動畫完成 callback'],
+      constraints:['動畫結束後才觸發數值結算','requestAnimationFrame 驅動，不用 setTimeout']},
+    {id:'l3b1',subId:'s3b',colorIdx:8,colorId:'violet',name:'1. 地圖交互邏輯',color:'#8517a1',
+      definition:'將觸控 / 滑鼠座標轉換為 junId，處理長按與縮放\n不負責渲染',
+      inputs:['觸控 / 滑鼠事件座標'],outputs:['junId','交互類型（點擊 / 長按 / 縮放）'],
+      constraints:['點擊落空率 < 2%','標籤膨脹最大 2px','長按判定 50ms']},
+    {id:'l3b2',subId:'s3b',colorIdx:8,colorId:'violet',name:'2. 資訊視圖層級',color:'#a31cc4',
+      definition:'依縮放倍率切換顯示的資訊密度\n不負責渲染計算',
+      inputs:['縮放倍率'],outputs:['視圖層級（總覽 / 州 / 郡）'],
+      constraints:['< 0.5 倍：只顯示勢力色 + 州名','0.5~1.5：加郡名 + 兵力','> 1.5：武將頭像 + 詳細屬性']},
+    {id:'l4a1',subId:'s4a',colorIdx:1,colorId:'orange',name:'1. 地圖編輯器',color:'#412a06',
+      definition:'視覺化標記郡國邊界點位並輸出座標 JSON\n不負責運行時地圖邏輯',
+      inputs:['底圖圖片','操作者點擊序列'],outputs:['郡國邊界座標 JSON'],
+      constraints:['右鍵觸發閉合多邊形','操作可撤銷','輸出格式與引擎 schema 對應']},
+    {id:'l4a2',subId:'s4a',colorIdx:1,colorId:'orange',name:'2. 劇本編譯器',color:'#613e0a',
+      definition:'解析 CSV 劇本格式，輸出遊戲可讀觸發器 JSON\n不負責劇本內容',
+      inputs:['劇本 CSV（觸發條件 | 對話 | 選項 | 結果）'],outputs:['觸發器 JSON 陣列'],
+      constraints:['觸發條件支援：回合數 / 郡國歸屬 / 武將存活 / 資源閾值','解析失敗需明確錯誤行號']},
+  ],
+  // 圓餅圖用（與 mainBranches 同步，L1 色）
+  branches:[
+    {id:'m1',name:'一. 核心引擎與數據架構',color:'#1b67da'},
+    {id:'m2',name:'二. 運算邏輯與數值系統',color:'#20b65c'},
+    {id:'m3',name:'三. 表現層與交互介面',color:'#bc29e0'},
+    {id:'m4',name:'四. 工具鏈與生產流程',color:'#e89417'},
+  ],
+  nodes:[
+    {id:'root',title:'軍團三國 DevLog',isRoot:true,branchId:null,objective:'',action:'',result:'',failure:'',next:'',tags:[],fails:[],images:[],files:[],children:['pl_m1','pl_m2','pl_m3','pl_m4'],parentId:null,
+      themeEngine:'純前端 HTML/JS/Canvas，無框架依賴',themeGameplay:'像素地圖領土模擬，三國時代背景，即時回合制策略',themeConstraints:'單檔案部署，行動裝置相容，效能 60fps',themeNotes:'Phase7 已完成 Frontline Propagation 重構，複雜度從 O(187K) 降至 O(~8K-15K)'},
+
+    // ── 主版塊主日誌 ──
+    {id:'pl_m1',title:'一. 核心引擎與數據架構',isRoot:false,isPrimaryLog:true,branchId:'m1',parentId:'root',
+      objective:'建立底層地圖數據架構、算法引擎、存檔格式，確保所有上層模塊的穩定基礎',
+      action:'定義 bin 格式、jun v2.3 數據集完成、Phase7 Frontline Propagation 上線',
+      result:'地圖格式版本化完成，frontline 算法複雜度 O(8K~15K)，相比 Phase6 O(187K) 下降 92%',
+      failure:'',
+      next:'待完成：路徑導航系統 A* 效能驗證、二進制壓縮格式在行動裝置的載入速度測試',
+      tags:['核心','底層'],fails:[],images:[],files:[],children:['pl_s1a','pl_s1b','n_l1a1_1','n_l1b1_1'],status:'pending'},
+
+    {id:'pl_m2',title:'二. 運算邏輯與數值系統',isRoot:false,isPrimaryLog:true,branchId:'m2',parentId:'root',
+      objective:'建立戰鬥、AI、經濟三個數值模塊的基礎框架，確保數值在合理範圍內可驗證',
+      action:'戰力公式（乘積結構）確定、AI 狀態機三狀態草案完成、糧草損耗模型設計完成',
+      result:'戰力範圍 1000~50000 驗證通過；AI 基本行為邏輯可用但個性差異待細化',
+      failure:'',
+      next:'待完成：性格模型的閾值調校、糧草線性損耗與平方損耗的對比測試',
+      tags:['數值','AI'],fails:['早期用加法公式，數值膨脹失控，改為乘積後穩定'],images:[],files:[],children:['pl_s2a','pl_s2b','pl_s2c'],status:'pending'},
+
+    {id:'pl_m3',title:'三. 表現層與交互介面',isRoot:false,isPrimaryLog:true,branchId:'m3',parentId:'root',
+      objective:'解決行動裝置渲染效能瓶頸，確保 9.6M 像素地圖在手機上達到可用幀率',
+      action:'雙 Canvas 架構完成（查找層 + 顯示層解耦）、gamma 校正問題修復、標籤膨脹消除點擊死角',
+      result:'dirty rect 重繪取代全圖清除；點擊落空率從 15% 降至 2% 以下',
+      failure:'',
+      next:'待完成：戰爭迷霧 BFS 效能驗證、多層資訊視圖縮放切換測試',
+      tags:['渲染','UI'],fails:['gamma 漂移導致顏色查找錯誤，已用 premultiplied alpha 修正'],images:[],files:[],children:['pl_s3a','pl_s3b'],status:'pending'},
+
+    {id:'pl_m4',title:'四. 工具鏈與生產流程',isRoot:false,isPrimaryLog:true,branchId:'m4',parentId:'root',
+      objective:'降低手工內容生產成本，讓地圖邊界與劇本擴充不依賴手寫座標',
+      action:'地圖編輯器 v0.1 完成邊界標記功能、劇本 CSV 格式草案確定',
+      result:'可視化標記邊界點位可用；劇本觸發條件格式待引擎整合驗證',
+      failure:'',
+      next:'待完成：地圖編輯器導出格式與引擎 schema 對齊、劇本編譯器觸發條件解析測試',
+      tags:['工具','流程'],fails:[],images:[],files:[],children:['pl_s4a'],status:'pending'},
+
+    // ── 次版塊主日誌 ──
+    {id:'pl_s1a',title:'A. 靜態數據庫',isRoot:false,isPrimaryLog:true,branchId:'s1a',parentId:'pl_m1',
+      objective:'確定 jun 數據格式並完成 v2.3 版本，鄰接關係雙向驗證通過',
+      action:'依 27 region 歷史順序重排 ID，HSL 等距分配顏色，重建鄰接陣列並通過雙向驗證',
+      result:'jun v2.3 完成，108 郡國 ID 歷史順序對齊，鄰接驗證 0 錯誤',
+      failure:'',
+      next:'武將庫錄入格式待確定；縣級預留欄位需要在下個版本明確',
+      tags:['數據'],fails:[],images:[],files:[],children:['n_l1a1_1','n_l1a2_1','n_l1a3_1'],status:'pending'},
+
+    {id:'pl_s1b',title:'B. 物理與邏輯引擎',isRoot:false,isPrimaryLog:true,branchId:'s1b',parentId:'pl_m1',
+      objective:'Phase7 重構完成，frontline 傳播算法取代全圖掃描，效能達標',
+      action:'移除全圖像素掃描迴圈，改為維護 frontline set，dirty rect 追蹤變動區域',
+      result:'複雜度 O(8K~15K)，幀率從 <10fps 恢復至穩定 60fps（120郡規模）',
+      failure:'',
+      next:'A* 路徑計算在超大地圖（9.6M 像素）的記憶體使用量待評估',
+      tags:['算法','效能'],fails:['全圖掃描在大地圖下幀率跌破 10fps，不可行','Web Worker 同步開銷抵消效能收益'],images:[],files:[],children:['n_l1b1_1','n_l1b2_1','n_l1b3_1'],status:'pending'},
+
+    {id:'pl_s2a',title:'A. 戰鬥結算系統',isRoot:false,isPrimaryLog:true,branchId:'s2a',parentId:'pl_m2',
+      objective:'確定乘積戰力公式與比例傷亡模型，避免數值膨脹',
+      action:'公式：兵力 × 將領修正 × 地形係數；地形係數 0.8~1.4；每回合傷亡 = 敵方戰力 × 0.05',
+      result:'數值範圍 1000~50000 驗證通過；潰散觸發（<10% 兵力）邏輯穩定',
+      failure:'',
+      next:'兵種克制係數待設計；傷兵轉換比例待決定',
+      tags:['戰鬥'],fails:['線性公式導致數值膨脹，已改為乘積'],images:[],files:[],children:['n_l2a1_1','n_l2a2_1'],status:'pending'},
+
+    {id:'pl_s2b',title:'B. 戰略 AI 行為中心',isRoot:false,isPrimaryLog:true,branchId:'s2b',parentId:'pl_m2',
+      objective:'建立三狀態 AI 狀態機（擴張 / 防守 / 屯田），確保 AI 不會做出明顯愚蠢決策',
+      action:'威脅值 = 鄰接敵軍兵力加總；資源值 = 糧草 / 城池；危急時強制屯田',
+      result:'AI 基本行為可用；曹操 / 袁紹性格參數差異已設計但閾值待調校',
+      failure:'',
+      next:'性格模型閾值調校（避免 AI 過於保守 / 過於激進）',
+      tags:['AI'],fails:['早期 AI 不考慮補給，主動自殺式長征'],images:[],files:[],children:['n_l2b1_1','n_l2b2_1'],status:'pending'},
+
+    {id:'pl_s2c',title:'C. 動態經濟系統',isRoot:false,isPrimaryLog:true,branchId:'s2c',parentId:'pl_m2',
+      objective:'讓玩家感受到補給線壓力，遠征需要考慮後勤',
+      action:'損耗率 = 距離 × 0.05（線性）；補給半徑 5 格；超出半徑士氣 -5% / 回合',
+      result:'遠征補給壓力有感；玩家無法無限延伸兵線',
+      failure:'',
+      next:'民心對產出的影響係數待校準（目前 >80 民心 ×1.3 產出是否平衡）',
+      tags:['經濟','後勤'],fails:['平方距離損耗超出 3 格幾乎斷糧，太嚴苛，已改為線性'],images:[],files:[],children:['n_l2c1_1','n_l2c2_1'],status:'pending'},
+
+    {id:'pl_s3a',title:'A. 圖形渲染管線',isRoot:false,isPrimaryLog:true,branchId:'s3a',parentId:'pl_m3',
+      objective:'雙 Canvas 架構上線，解決行動裝置渲染效能瓶頸',
+      action:'Canvas A（隱藏）做 junId 查找；Canvas B（顯示）獨立重繪；gamma 校正一次性處理',
+      result:'indexed PNG 壓縮比 25x；dirty rect 重繪取代全圖清除；幀率達標',
+      failure:'',
+      next:'戰爭迷霧遮罩渲染效能待驗證（BFS + Canvas 半透明疊加）',
+      tags:['渲染','效能'],fails:['gamma 漂移導致顏色查找錯誤，用 premultiplied alpha 修正'],images:[],files:[],children:['n_l3a1_1','n_l3a2_1','n_l3a3_1'],status:'pending'},
+
+    {id:'pl_s3b',title:'B. 用戶體驗與交互',isRoot:false,isPrimaryLog:true,branchId:'s3b',parentId:'pl_m3',
+      objective:'解決行動裝置觸控精度問題，點擊落空率降至 2% 以下',
+      action:'標籤膨脹 2px 填補邊界細縫；50ms 長按判定防誤觸',
+      result:'點擊落空率從 15% 降至 2% 以下',
+      failure:'',
+      next:'多層資訊視圖縮放切換邏輯待整合測試',
+      tags:['UX','觸控'],fails:['膨脹 3px 導致細長郡國被相鄰郡國覆蓋，2px 是最大安全值'],images:[],files:[],children:['n_l3b1_1','n_l3b2_1'],status:'pending'},
+
+    {id:'pl_s4a',title:'A. 內容編輯器',isRoot:false,isPrimaryLog:true,branchId:'s4a',parentId:'pl_m4',
+      objective:'讓地圖邊界標記和劇本輸入不依賴手工座標，建立內容生產工具鏈',
+      action:'地圖編輯器 v0.1：Canvas 疊加點擊記錄座標；劇本 CSV 格式確定',
+      result:'視覺化邊界標記可用；劇本格式待引擎整合',
+      failure:'',
+      next:'地圖編輯器導出格式與引擎 schema 對齊；劇本編譯器解析邏輯實作',
+      tags:['工具'],fails:[],images:[],files:[],children:['n_l4a1_1','n_l4a2_1'],status:'pending'},
+
+    // ── 第四層節點（葉版塊下的實作日誌）──
+    {id:'n_l1a1_1',title:'jun v2.3 — ID 重排與鄰接重建',isRoot:false,branchId:'l1a1',parentId:'pl_s1a',
+      objective:'依 27 region 歷史順序重排 junId，重建鄰接陣列並通過雙向驗證',
+      action:'確認 27 region 歷史序列（司隸→豫→兗→…）→ 重新分配 junId → 重建 neighbor 雙向驗證 → python 腳本批量生成新 bin',
+      result:'jun v2.3 完成，108 郡國，鄰接驗證 0 錯誤，HSL 等距色系對齊',
+      failure:'',
+      next:'',
+      tags:['jun','座標','v2.3'],fails:['v2.1 自動生成 ID，與史料對照需要額外映射表，維護成本高'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l1a2_1',title:'武將庫 — 屬性格式確定',isRoot:false,branchId:'l1a2',parentId:'pl_s1a',
+      objective:'確定武將四維屬性格式，預留技能代碼與 i18n 擴充空間',
+      action:'統武智政各 1-100；特技代碼用字串陣列；加入歷史關聯郡國 ID 與在世區間欄位',
+      result:'格式確定，可開始錄入歷史武將數據',
+      failure:'',
+      next:'開始錄入三國武將基礎數值（優先：曹魏五子良將、蜀漢五虎將）',
+      tags:['武將','格式'],fails:[],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l1a3_1',title:'行政區劃 — 三層結構確定',isRoot:false,branchId:'l1a3',parentId:'pl_s1a',
+      objective:'確定州—郡—縣三層層級邏輯，縣級預留擴充空間',
+      action:'13 州 → 108 郡 → N 縣（縣級暫不實作，欄位預留）',
+      result:'層級邏輯確定；州作為顯示分組，郡為最小領土單位',
+      failure:'',
+      next:'縣級觸發事件的粒度需求待確認',
+      tags:['區劃','層級'],fails:['最初只有兩層，後期發現需要縣級做細粒度事件觸發，提前預留'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l1b1_1',title:'Frontline Propagation — Phase7 核心算法',isRoot:false,branchId:'l1b1',parentId:'pl_s1b',
+      objective:'用邊界優先傳播取代全圖掃描，將幀率從 <10fps 恢復至 60fps',
+      action:'維護 frontline set（所有與不同勢力相鄰的格子）→ 每回合只處理 frontline → 計算侵蝕結果 → 更新 frontline',
+      result:'時間複雜度 O(frontline) ≈ O(8K~15K)；120 郡規模 60fps 穩定',
+      failure:'',
+      next:'超過 200 郡時 frontline size 是否線性增長，待壓測',
+      tags:['算法','Phase7','效能'],fails:['Phase6 全圖 O(187K) 在 120 郡時幀率 <10fps','Web Worker 同步開銷抵消效能收益'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l1b2_1',title:'路徑導航 — A* 實作',isRoot:false,branchId:'l1b2',parentId:'pl_s1b',
+      objective:'在 9.6M 像素格地圖上實作可用的路徑計算',
+      action:'A* 以像素格為節點；g(n) = 移動代價（平地 1，山地 3）；h(n) = Manhattan 距離',
+      result:'小地圖（1K 格）計算正常；大地圖效能待測',
+      failure:'',
+      next:'測試 9.6M 格規模下的記憶體使用量，評估是否需要分層導航',
+      tags:['路徑','A*'],fails:['Dijkstra 無啟發函數，大地圖太慢'],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l1b3_1',title:'二進制壓縮 — indexed PNG 方案',isRoot:false,branchId:'l1b3',parentId:'pl_s1b',
+      objective:'將地圖壓縮為 8-bit indexed PNG，解決行動裝置載入速度問題',
+      action:'每像素值 = junId（0-107）→ Canvas 載入 PNG → getImageData → 建立查找表',
+      result:'壓縮比 25x；查找表建立後點擊判斷 < 1ms',
+      failure:'gamma 自動校正使像素值偏移，導致 ID 查找錯誤。修正：關閉 gamma 校正 / premultiplied alpha',
+      next:'',
+      tags:['壓縮','PNG','格式'],fails:['gamma 自動校正會讓像素值偏移，導致 ID 查找錯誤'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l2a1_1',title:'戰力公式 v1 — 乘積模型',isRoot:false,branchId:'l2a1',parentId:'pl_s2a',
+      objective:'設計一個數值有感、不膨脹的戰力計算公式',
+      action:'戰力 = 兵力 × (武力/50) × 地形係數（0.8~1.4）；公式驗證：10000×1.8×1.0=18000 vs 5000×1.2×0.8=4800',
+      result:'比例合理，不會出現以寡擊眾必勝的荒謬情況',
+      failure:'',
+      next:'兵種克制係數待加入（步兵 / 騎兵 / 水軍）',
+      tags:['公式','數值'],fails:['加法公式：高武將+大量兵力 = 天文數字，比例失真'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l2a2_1',title:'傷亡模型 — 比例衰減',isRoot:false,branchId:'l2a2',parentId:'pl_s2a',
+      objective:'讓傷亡有感但不過激，一場戰鬥不會全滅',
+      action:'每回合傷亡 = 敵方戰力 × 0.05；兵力 < 10% 觸發潰散，保留 30% 兵力撤退',
+      result:'傷亡節奏合理；潰散邏輯穩定',
+      failure:'',
+      next:'傷兵轉換比例待決定（是否有部分傷亡可恢復）',
+      tags:['傷亡','潰散'],fails:[],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l2b1_1',title:'目標評估器 — 三閾值狀態機',isRoot:false,branchId:'l2b1',parentId:'pl_s2b',
+      objective:'讓 AI 根據威脅值和資源值切換行動狀態，不再做明顯愚蠢決策',
+      action:'威脅值 = 鄰接敵軍兵力加總；資源值 = 糧草 / 城池；三閾值：安全 / 警戒 / 危急；危急時強制屯田',
+      result:'AI 基本行為合理；不再出現糧草耗盡還繼續遠征',
+      failure:'',
+      next:'閾值數值調校（目前 AI 切換過於頻繁，策略連貫性差）',
+      tags:['AI','決策'],fails:['早期 AI 只看鄰近兵力，不考慮補給，主動自殺式長征'],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l2b2_1',title:'性格模型 — 曹操 vs 袁紹參數',isRoot:false,branchId:'l2b2',parentId:'pl_s2b',
+      objective:'讓不同武將的 AI 行為有可識別的個性差異',
+      action:'性格三參數：侵略性 / 保守性 / 冒險性（各 0-1）；閾值乘以 (1-侵略性)，侵略性高的 AI 更晚觸發防守',
+      result:'曹操（侵略0.8）比袁紹（侵略0.5）明顯更激進，差異可感知',
+      failure:'',
+      next:'外交事件觸發條件（同盟 / 背刺）待設計',
+      tags:['AI','性格'],fails:[],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l2c1_1',title:'糧草流轉 — 線性距離損耗',isRoot:false,branchId:'l2c1',parentId:'pl_s2c',
+      objective:'讓遠征有後勤壓力，但不至於超出 3 格就幾乎斷糧',
+      action:'損耗率 = 距離 × 0.05（線性）；超出 5 格補給半徑士氣 -5% / 回合',
+      result:'玩家感受到補給線壓力；策略深度提升',
+      failure:'',
+      next:'損耗係數 0.05 是否合理，待玩測校準',
+      tags:['糧草','後勤'],fails:['平方距離損耗超出 3 格幾乎斷糧，太嚴苛'],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l2c2_1',title:'民心系統 — 內政影響產出',isRoot:false,branchId:'l2c2',parentId:'pl_s2c',
+      objective:'讓玩家有做內政的動機，而不是純軍事擴張',
+      action:'民心值 0-100；屯田 +5 / 回合；連續戰鬥 -10；民心 > 80 時糧草產出 × 1.3',
+      result:'玩家有了做內政的理由；民心影響只在本城生效',
+      failure:'',
+      next:'民心 > 80 的 ×1.3 產出是否過強，待玩測',
+      tags:['民心','內政'],fails:[],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l3a1_1',title:'雙 Canvas 架構 — 查找層與顯示層解耦',isRoot:false,branchId:'l3a1',parentId:'pl_s3a',
+      objective:'解決單 Canvas 每幀全量重繪造成的行動裝置幀率崩潰',
+      action:'Canvas A（隱藏）：indexed PNG 建立 junId 查找表；Canvas B（顯示）：只重繪 dirty rect；兩層完全解耦',
+      result:'點擊判斷 < 1ms；dirty rect 重繪取代全圖清除；行動裝置幀率達標',
+      failure:'',
+      next:'dirty rect 合併邏輯待優化（多個小 rect 合併為大 rect 減少 drawImage 次數）',
+      tags:['Canvas','渲染','架構'],fails:['單 Canvas 全量重繪：行動裝置幀率 <15fps'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l3a2_1',title:'戰爭迷霧 — BFS 視野計算',isRoot:false,branchId:'l3a2',parentId:'pl_s3a',
+      objective:'動態計算玩家可見範圍，未探索區域顯示黑霧',
+      action:'BFS 從每個己方城池擴散；視野半徑 = 城池等級 × 3 格；有武將駐守 +2 格；山地 -1 格',
+      result:'視野計算邏輯正確；遮罩渲染效能待驗證',
+      failure:'',
+      next:'大量城池時 BFS 總計算量是否超過 20ms 預算，待壓測',
+      tags:['迷霧','視野'],fails:[],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l3a3_1',title:'特效管理器 — 動畫隊列系統',isRoot:false,branchId:'l3a3',parentId:'pl_s3a',
+      objective:'確保動畫與數值結算同步，不出現視覺與邏輯錯位',
+      action:'動畫隊列：每個動畫有 duration 和 callback；requestAnimationFrame 驅動；動畫結束後才觸發數值結算',
+      result:'視覺與邏輯同步問題解決',
+      failure:'',
+      next:'多個動畫並行播放時的隊列管理邏輯待優化',
+      tags:['動畫','特效'],fails:['動畫還未結束就更新數值，導致顯示混亂'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l3b1_1',title:'地圖交互 — 標籤膨脹消除死角',isRoot:false,branchId:'l3b1',parentId:'pl_s3b',
+      objective:'將觸控點擊落空率從 15% 降至 2% 以下',
+      action:'邊界膨脹算法：對每個 junId 邊界像素往四個方向各延伸 2px；配合 50ms 長按判定防誤觸',
+      result:'點擊落空率從 ~15% 降至 <2%',
+      failure:'',
+      next:'長按選單 UI 設計待確定',
+      tags:['觸控','精度'],fails:['膨脹 3px 導致細長郡國被相鄰郡國覆蓋，2px 是最大安全值'],images:[],files:[],children:[],status:'done'},
+
+    {id:'n_l3b2_1',title:'資訊視圖 — 三層縮放切換',isRoot:false,branchId:'l3b2',parentId:'pl_s3b',
+      objective:'小螢幕上依縮放倍率自動切換資訊密度，避免視覺混亂',
+      action:'< 0.5：只顯示勢力色 + 州名；0.5~1.5：加郡名 + 兵力；> 1.5：武將頭像 + 詳細屬性',
+      result:'層級切換邏輯設計完成，待渲染整合',
+      failure:'',
+      next:'武將頭像資產待製作；高縮放層級的渲染效能待測',
+      tags:['視圖','層級'],fails:[],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l4a1_1',title:'地圖編輯器 v0.1 — 邊界標記',isRoot:false,branchId:'l4a1',parentId:'pl_s4a',
+      objective:'讓地圖邊界標記可視化，取代手工輸入 108 郡國的邊界座標',
+      action:'Canvas 疊加點擊記錄邊界點；右鍵觸發閉合多邊形；自動導出 JSON 格式座標',
+      result:'基本標記流程可用；閉合算法正確',
+      failure:'',
+      next:'導出格式與引擎 jun schema 對齊；撤銷功能待實作',
+      tags:['編輯器','地圖'],fails:['矩形框選無法處理不規則郡國形狀'],images:[],files:[],children:[],status:'pending'},
+
+    {id:'n_l4a2_1',title:'劇本編譯器 — CSV 轉觸發器 JSON',isRoot:false,branchId:'l4a2',parentId:'pl_s4a',
+      objective:'讓劇本可以在 Excel 維護，一鍵轉為遊戲可讀觸發器格式',
+      action:'CSV 格式：觸發條件 | 對話文字 | 選項1 | 結果1 | 選項2 | 結果2；編譯器解析後輸出 JSON',
+      result:'格式設計完成；解析邏輯待實作',
+      failure:'',
+      next:'實作解析器；觸發條件：回合數 / 郡國歸屬 / 武將存活 / 資源閾值',
+      tags:['劇本','編譯器'],fails:[],images:[],files:[],children:[],status:'pending'},
+  ],
+  // journalNodes 已廢棄，日誌直接對應節點
+};
+
+
+let selectedId=null,ctxId=null;
+let _copyNodeHistory=[];
+let navHist=[],navIdx=-1;
+let viewMode='pie'; // 'pie' | 'folder'
+
+// ═══════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════
+function node(id){return S.nodes.find(n=>n.id===id);}
+function hex2rgba(h,a){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
+function nodeColor(n){
+  if(n.isRoot)return'#ffffff';
+  // search across all tiers
+  const allBranches=[...(S.branches||[]),...(S.mainBranches||[]),...(S.subBranches||[]),...(S.leafBranches||[])];
+  const b=allBranches.find(b=>b.id===n.branchId);
+  return b?b.color:'#6b7a96';
+}
+function hasFail(nd){return nd.fails&&nd.fails.length>0;}
+function hasAncestorFail(id){
+  let nd=node(id);
+  while(nd&&nd.parentId){const p=node(nd.parentId);if(p&&hasFail(p))return true;nd=p;}
+  return false;
+}
+function getAncestorFails(id){
+  const res=[];let nd=node(id);
+  while(nd&&nd.parentId){const p=node(nd.parentId);if(p&&hasFail(p))res.push({from:p.title,fails:p.fails});nd=p;}
+  return res;
+}
+function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{
+    const d=localStorage.getItem(STORE_KEY);
+    if(d){
+      const parsed=JSON.parse(d);
+      S=parsed;
+      if(!S.mainBranches)S.mainBranches=[];
+      if(!S.subBranches)S.subBranches=[];
+      if(!S.leafBranches)S.leafBranches=[];
+      if(!S.branches)S.branches=[];
+      S.nodes.forEach(n=>{if(n.topic===undefined)n.topic='';});
+      // migrate theme fields on root
+      const rootNd=S.nodes.find(n=>n.id==='root');
+      if(rootNd){
+        if(!rootNd.themeEngine)rootNd.themeEngine='';
+        if(!rootNd.themeGameplay)rootNd.themeGameplay='';
+        if(!rootNd.themePlatform)rootNd.themePlatform='';
+        if(!rootNd.themeConstraints)rootNd.themeConstraints='';
+        if(!rootNd.themeNotes)rootNd.themeNotes='';
+      };
+      // migrate v2: 強制重算 color，對齊色彩系統 v2（L1/L2_VARIANTS/L3_SHADES）
+      (S.mainBranches||[]).forEach(m=>{
+        if(!m.colorId)m.colorId=L1_COLORS[m.colorIdx%L1_COLORS.length]?.id||'gray';
+        const l1=L1_COLORS.find(c=>c.id===m.colorId);
+        if(l1)m.color=l1.hex;
+        // migrate v20: branch structured fields
+        if(!m.definition)m.definition=m.desc||'';
+        if(!m.constraints)m.constraints=[];
+      });
+      (S.subBranches||[]).forEach(s=>{
+        const main=(S.mainBranches||[]).find(m=>m.id===s.mainId);
+        if(!s.colorId)s.colorId=main?.colorId||L1_COLORS[s.colorIdx%L1_COLORS.length]?.id||'gray';
+        const variants=L2_VARIANTS[s.colorId]||L2_VARIANTS.gray;
+        const siblings=(S.subBranches||[]).filter(x=>x.mainId===s.mainId);
+        const idx=siblings.indexOf(s);
+        s.color=variants[idx%variants.length];
+        // migrate v20
+        if(!s.definition)s.definition=s.desc||'';
+        if(!s.inputs)s.inputs=[];
+        if(!s.outputs)s.outputs=[];
+        if(!s.constraints)s.constraints=[];
+      });
+      (S.leafBranches||[]).forEach(l=>{
+        const sub=(S.subBranches||[]).find(s=>s.id===l.subId);
+        const main=(S.mainBranches||[]).find(m=>m.id===sub?.mainId);
+        if(!l.colorId)l.colorId=main?.colorId||L1_COLORS[l.colorIdx%L1_COLORS.length]?.id||'gray';
+        const siblings=(S.leafBranches||[]).filter(x=>x.subId===l.subId);
+        const idx=siblings.indexOf(l);
+        l.color=getShadeColor(l.colorId,idx);
+        // migrate v20
+        if(!l.definition)l.definition=l.desc||'';
+        if(!l.inputs)l.inputs=[];
+        if(!l.outputs)l.outputs=[];
+        if(!l.constraints)l.constraints=[];
+      });
+      // migrate v20: node fields — old topic/reason/content/walkthrough/prompt → new schema
+      S.nodes.forEach(n=>{
+        if(n.objective===undefined){
+          // 盡量保留舊內容：objective←topic, action←content, result←walkthrough, failure←fails[0], next←prompt
+          n.objective=n.topic||'';
+          n.action=n.content||n.reason||'';
+          n.result=n.walkthrough||'';
+          n.failure='';
+          n.next=n.prompt||'';
+        }
+      });
+    }else{
+      // Fresh init
+    }
+  }catch(e){}
+  syncBranchesToMain();
+  migrateEnsurePrimaryLogs();
+}
+function syncBranchesToMain(){
+  if(S.mainBranches&&S.mainBranches.length>0){
+    S.branches=S.mainBranches.map(m=>({id:m.id,name:m.name,color:m.color}));
+  }
+}
+
+// ── Primary log helpers ──────────────────────────────────
+function getBranchPrimaryLogId(branchId){
+  const allBr=[...(S.mainBranches||[]),...(S.subBranches||[])];
+  return allBr.find(b=>b.id===branchId)?.primaryLogId||null;
+}
+function getBranchHiddenFolderId(branchId){
+  const allBr=[...(S.mainBranches||[]),...(S.subBranches||[])];
+  return allBr.find(b=>b.id===branchId)?.hiddenFolderId||null;
+}
+function getBranchTier(branchId){
+  if((S.mainBranches||[]).find(b=>b.id===branchId))return'main';
+  if((S.subBranches||[]).find(b=>b.id===branchId))return'sub';
+  return'leaf';
+}
+
+function migrateEnsurePrimaryLogs(){
+  const allBranches=[
+    ...(S.mainBranches||[]).map(b=>({...b,_tier:'main'})),
+    ...(S.subBranches||[]).map(b=>({...b,_tier:'sub'})),
+  ];
+  let changed=false;
+  allBranches.forEach(br=>{
+    // 1. 確保主日誌節點存在
+    if(!br.primaryLogId||!node(br.primaryLogId)){
+      const nid='pl_'+br.id+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+      const parentId=br._tier==='sub'?
+        (getBranchPrimaryLogId(br.mainId)||'root'):'root';
+      S.nodes.push({
+        id:nid,title:br.name,isRoot:false,isPrimaryLog:true,branchId:br.id,
+        parentId,objective:br.definition||br.desc||'',action:'',result:'',failure:'',
+        next:'',tags:[],fails:[],images:[],files:[],children:[],
+      });
+      const parent=node(parentId);if(parent&&!parent.children.includes(nid))parent.children.push(nid);
+      const arr=br._tier==='main'?S.mainBranches:S.subBranches;
+      const item=arr.find(x=>x.id===br.id);
+      if(item){item.primaryLogId=nid;}
+      changed=true;
+    }
+    // 2. 確保隱藏資料夾存在（掛在主日誌節點下）
+    if(!br.hiddenFolderId||!node(br.hiddenFolderId)){
+      const fid='hf_'+br.id+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+      const plId=getBranchPrimaryLogId(br.id);
+      const parentId=plId||'root';
+      S.nodes.push({
+        id:fid,title:'[副日誌]',isRoot:false,isHiddenFolder:true,branchId:br.id,
+        parentId,objective:'',action:'',result:'',failure:'',
+        next:'',tags:[],fails:[],images:[],files:[],children:[],
+      });
+      const parent=node(parentId);if(parent&&!parent.children.includes(fid))parent.children.push(fid);
+      const arr=br._tier==='main'?S.mainBranches:S.subBranches;
+      const item=arr.find(x=>x.id===br.id);
+      if(item){item.hiddenFolderId=fid;}
+      changed=true;
+    }
+  });
+  if(changed)save();
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.opacity='0',2600);}
+// ── 通用 prompt modal（取代原生 prompt()，相容手機 WebView）──
+let _promptCb=null;
+function showPrompt(title,placeholder,cb){
+  _promptCb=cb;
+  document.getElementById('modal-prompt-title').textContent=title;
+  const inp=document.getElementById('modal-prompt-input');
+  inp.placeholder=placeholder||'';
+  inp.value='';
+  _openModal('modal-prompt');
+  setTimeout(()=>inp.focus(),120);
+}
+function _promptConfirm(){
+  const val=document.getElementById('modal-prompt-input').value.trim();
+  if(!val)return;
+  closeModal('modal-prompt');
+  if(_promptCb){const cb=_promptCb;_promptCb=null;cb(val);}
+}
+function _promptCancel(){
+  closeModal('modal-prompt');
+  _promptCb=null;
+}
+
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  if(!document.querySelector('.modal-overlay.open')){
+    document.getElementById('canvas-wrap').style.touchAction='';
+  }
+}
+function _openModal(id){
+  document.getElementById('canvas-wrap').style.touchAction='auto';
+  document.getElementById(id).classList.add('open');
+}
+
+// Make all modals scrollable on iOS by handling touch on .modal directly
+(function(){
+  let _mTouchY=0;
+  document.addEventListener('touchstart',function(e){
+    const modal=e.target.closest('.modal');
+    if(modal){_mTouchY=e.touches[0].clientY;}
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    const overlay=e.target.closest('.modal-overlay');
+    if(!overlay)return;
+    const modal=e.target.closest('.modal');
+    if(!modal){e.preventDefault();return;} // touched the dark backdrop: block
+    // touched inside modal: allow scroll
+    const dy=_mTouchY - e.touches[0].clientY;
+    _mTouchY=e.touches[0].clientY;
+    const atTop=modal.scrollTop===0;
+    const atBot=modal.scrollTop+modal.clientHeight>=modal.scrollHeight-1;
+    if((dy<0&&atTop)||(dy>0&&atBot)){e.preventDefault();return;}
+    modal.scrollTop+=dy;
+    e.preventDefault();
+  },{passive:false});
+})();
+
+// ═══════════════════════════════════
+// VIEW MODE
+// ═══════════════════════════════════
+function setViewMode(m){
+  viewMode=m;
+  document.getElementById('vt-pie').classList.toggle('active',m==='pie');
+  document.getElementById('vt-folder').classList.toggle('active',m==='folder');
+  document.getElementById('canvas-wrap').style.display=m==='pie'?'':'none';
+  const fv=document.getElementById('folder-view');
+  const panel=document.getElementById('panel');
+  if(m==='folder'){
+    fv.classList.add('active');
+    panel.classList.add('folder-overlay');
+    renderFolderView();
+  } else {
+    fv.classList.remove('active');
+    panel.classList.remove('folder-overlay');
+    fullRender();
+  }
+}
+
+// ═══════════════════════════════════
+// CANVAS / VIEWPORT
+// ═══════════════════════════════════
+const wrap=document.getElementById('canvas-wrap');
+const CVS=document.getElementById('graph-canvas');
+const cx=CVS.getContext('2d');
+
+let vp={x:0,y:0,s:1};
+let panning=false,panS={x:0,y:0},vpS={x:0,y:0};
+let _rafPending=false;
+
+function w2s(wx,wy){return{x:wx*vp.s+vp.x+CVS.width/2,y:wy*vp.s+vp.y+CVS.height/2};}
+function resize(){
+  CVS.width=wrap.clientWidth;CVS.height=wrap.clientHeight;
+  if(viewMode==='pie'){drawPie();}
+}
+function zoom(f){vp.s=Math.min(3,Math.max(0.15,vp.s*f));drawPie();}
+function resetView(){vp={x:0,y:0,s:1};drawPie();}
+
+// Mouse pan
+wrap.addEventListener('mousedown',e=>{
+  if(e.target===wrap||e.target===CVS){
+    panning=true;panS={x:e.clientX,y:e.clientY};vpS={x:vp.x,y:vp.y};wrap.classList.add('grabbing');
+  }
+});
+window.addEventListener('mousemove',e=>{
+  if(!panning)return;
+  vp.x=vpS.x+(e.clientX-panS.x);vp.y=vpS.y+(e.clientY-panS.y);
+  _scheduleRender();
+});
+window.addEventListener('mouseup',()=>{panning=false;wrap.classList.remove('grabbing');});
+wrap.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=e.deltaY<0?1.1:.91;
+  const r=wrap.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  const wx=(mx-vp.x-CVS.width/2)/vp.s,wy=(my-vp.y-CVS.height/2)/vp.s;
+  vp.s=Math.min(3,Math.max(0.15,vp.s*f));
+  vp.x=mx-CVS.width/2-wx*vp.s;vp.y=my-CVS.height/2-wy*vp.s;
+  _scheduleRender();
+},{passive:false});
+wrap.addEventListener('click',e=>{
+  if(e.target===wrap||e.target===CVS){
+    hideCtx();
+    closePopout();
+  }
+});
+document.addEventListener('click',hideCtx);
+
+// Touch pan + pinch
+let _touches={},_tpStart=null,_tvpStart=null;
+// Pinch：記錄手勢開始時的完整快照，避免累積誤差
+let _pinchActive=false,_pinch0={d:0,s:0,vpx:0,vpy:0,mx:0,my:0};
+function _tdist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
+function _tmid(a,b,r){return{x:(a.clientX+b.clientX)/2-r.left,y:(a.clientY+b.clientY)/2-r.top};}
+
+function _scheduleRender(){
+  if(_rafPending)return;
+  _rafPending=true;
+  requestAnimationFrame(()=>{_rafPending=false;drawPie();});
+}
+
+wrap.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t=>{_touches[t.identifier]=t;});
+  const pts=Object.values(_touches);
+  if(pts.length===1){
+    // 單指平移：記錄起點快照
+    _tpStart={x:pts[0].clientX,y:pts[0].clientY};
+    _tvpStart={x:vp.x,y:vp.y};
+    _pinchActive=false;
+  } else if(pts.length===2){
+    // 雙指 pinch：在手勢開始時一次性快照所有基準值，move 裡只做插值
+    const r=wrap.getBoundingClientRect();
+    const mid=_tmid(pts[0],pts[1],r);
+    _pinch0={
+      d:_tdist(pts[0],pts[1]),
+      s:vp.s,
+      vpx:vp.x,vpy:vp.y,
+      mx:mid.x,my:mid.y,
+      // 快照手勢起點對應的 world 座標
+      wx:(mid.x-vp.x-CVS.width/2)/vp.s,
+      wy:(mid.y-vp.y-CVS.height/2)/vp.s,
+    };
+    _pinchActive=true;
+    _tpStart=null;
+  }
+},{passive:false});
+
+wrap.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t=>{_touches[t.identifier]=t;});
+  const pts=Object.values(_touches);
+  if(pts.length===1&&_tpStart&&!_pinchActive){
+    // 單指平移：相對起點快照做 delta，不累積誤差
+    vp.x=_tvpStart.x+(pts[0].clientX-_tpStart.x);
+    vp.y=_tvpStart.y+(pts[0].clientY-_tpStart.y);
+    _scheduleRender();
+  } else if(pts.length>=2&&_pinchActive){
+    const r=wrap.getBoundingClientRect();
+    const d=_tdist(pts[0],pts[1]);
+    const ns=Math.min(3,Math.max(0.15,_pinch0.s*d/_pinch0.d));
+    // 用快照 world 座標反推新 viewport，確保縮放中心不飄移
+    vp.s=ns;
+    vp.x=_pinch0.mx-CVS.width/2-_pinch0.wx*ns;
+    vp.y=_pinch0.my-CVS.height/2-_pinch0.wy*ns;
+    _scheduleRender();
+  }
+},{passive:false});
+
+wrap.addEventListener('touchend',e=>{
+  Array.from(e.changedTouches).forEach(t=>{delete _touches[t.identifier];});
+  const pts=Object.values(_touches);
+  if(pts.length===1){
+    // 從雙指回到單指：重設平移基準
+    _tpStart={x:pts[0].clientX,y:pts[0].clientY};
+    _tvpStart={x:vp.x,y:vp.y};
+    _pinchActive=false;
+  } else if(pts.length===0){
+    _tpStart=null;_pinchActive=false;
+  }
+},{passive:false});
+
+// ═══════════════════════════════════
+// SECTOR (PIE) DRAWING — on cx (drawn before edges)
+// ═══════════════════════════════════
+const PIE_R=42;     // 主版塊內圈半徑（world units）
+const PIE_R2=72;    // 次版塊外圈半徑（world units）
+const PIE_R3=100;   // 三級版塊外圈半徑（world units）
+
+// 中文數字標籤
+const HAN_NUM=['一','二','三','四','五','六','七','八','九','十'];
+
+function drawSectors(){
+  const nb=S.mainBranches&&S.mainBranches.length?S.mainBranches.length:S.branches.length;
+  if(!nb)return;
+  const ctr=w2s(0,0);
+  const r1=PIE_R*vp.s;    // 主版塊外緣
+  const r2=PIE_R2*vp.s;   // 次版塊外緣
+  const r3=PIE_R3*vp.s;   // 三級版塊外緣
+  const slice=Math.PI*2/nb;
+  const mains=S.mainBranches&&S.mainBranches.length?S.mainBranches:S.branches;
+
+  // ── 第三圈：三級版塊 ──
+  mains.forEach((m,i)=>{
+    const a0=-Math.PI/2+slice*i,a1=a0+slice;
+    const subs=(S.subBranches||[]).filter(s=>s.mainId===m.id);
+    if(!subs.length){
+      _drawRing(ctr,r2,r3,a0,a1,m.color,0.10,0.25,0.6);
+      return;
+    }
+    const subSlice=(a1-a0)/subs.length;
+    subs.forEach((s,j)=>{
+      const sa0=a0+subSlice*j,sa1=sa0+subSlice;
+      const leaves=(S.leafBranches||[]).filter(l=>l.subId===s.id);
+      if(!leaves.length){
+        _drawRing(ctr,r2,r3,sa0,sa1,s.color,0.10,0.25,0);
+        return;
+      }
+      const leafSlice=(sa1-sa0)/leaves.length;
+      leaves.forEach((l,k)=>{
+        const la0=sa0+leafSlice*k,la1=la0+leafSlice;
+        _drawRing(ctr,r2,r3,la0,la1,l.color,0.14,0.35,0);
+        // 三級標籤（數字）
+        if(r3-r2>14){
+          const am=(la0+la1)/2,lr=(r2+r3)/2;
+          const fz=Math.max(6,Math.min(10,vp.s*8));
+          cx.fillStyle=hex2rgba(l.color,.75);
+          cx.font=`600 ${fz}px JetBrains Mono,monospace`;
+          cx.textAlign='center';cx.textBaseline='middle';
+          cx.fillText(String(k+1),ctr.x+Math.cos(am)*lr,ctr.y+Math.sin(am)*lr);
+        }
+      });
+    });
+  });
+
+  // ── 第二圈：次版塊 ──
+  mains.forEach((m,i)=>{
+    const a0=-Math.PI/2+slice*i,a1=a0+slice;
+    const subs=(S.subBranches||[]).filter(s=>s.mainId===m.id);
+    if(!subs.length){
+      _drawRing(ctr,r1,r2,a0,a1,m.color,0.12,0.30,0);
+      return;
+    }
+    const subSlice=(a1-a0)/subs.length;
+    subs.forEach((s,j)=>{
+      const sa0=a0+subSlice*j,sa1=sa0+subSlice;
+      _drawRing(ctr,r1,r2,sa0,sa1,s.color,0.16,0.38,0);
+      // 次版塊標籤（A/B/C）
+      if(r2-r1>14){
+        const am=(sa0+sa1)/2,lr=(r1+r2)/2;
+        const abbr=String.fromCharCode(65+j);
+        const fz=Math.max(7,Math.min(11,vp.s*9));
+        cx.fillStyle=hex2rgba(s.color,.8);
+        cx.font=`700 ${fz}px JetBrains Mono,monospace`;
+        cx.textAlign='center';cx.textBaseline='middle';
+        cx.fillText(abbr,ctr.x+Math.cos(am)*lr,ctr.y+Math.sin(am)*lr);
+      }
+    });
+    // 主版塊邊界線延伸到 r3
+    cx.beginPath();cx.moveTo(ctr.x+Math.cos(a0)*r1,ctr.y+Math.sin(a0)*r1);
+    cx.lineTo(ctr.x+Math.cos(a0)*r3,ctr.y+Math.sin(a0)*r3);
+    cx.strokeStyle=hex2rgba(m.color,.45);cx.lineWidth=1;cx.stroke();
+  });
+
+  // ── 第一圈：主版塊（最深色，最內） ──
+  mains.forEach((b,i)=>{
+    const a0=-Math.PI/2+slice*i,a1=a0+slice;
+    cx.beginPath();cx.moveTo(ctr.x,ctr.y);cx.arc(ctr.x,ctr.y,r1,a0,a1);cx.closePath();
+    cx.fillStyle=hex2rgba(b.color,.22);cx.fill();
+    cx.strokeStyle=hex2rgba(b.color,.6);cx.lineWidth=1.5;cx.stroke();
+    // 標籤：中文數字
+    const am=(a0+a1)/2,lr=r1*0.58;
+    const label=HAN_NUM[i]||String(i+1);
+    const fz=Math.max(10,Math.min(18,vp.s*14));
+    cx.fillStyle=hex2rgba(b.color,.95);
+    cx.font=`700 ${fz}px Noto Sans TC,sans-serif`;
+    cx.textAlign='center';cx.textBaseline='middle';
+    cx.fillText(label,ctr.x+Math.cos(am)*lr,ctr.y+Math.sin(am)*lr);
+  });
+
+  // ── 外圈裝飾線 ──
+  cx.beginPath();cx.arc(ctr.x,ctr.y,r3,0,Math.PI*2);
+  cx.strokeStyle='rgba(255,255,255,.05)';cx.lineWidth=1;cx.stroke();
+}
+
+// 畫環形扇片輔助
+function _drawRing(ctr,rIn,rOut,a0,a1,color,fillA,strokeA,labelR){
+  cx.beginPath();
+  cx.moveTo(ctr.x+Math.cos(a0)*rIn,ctr.y+Math.sin(a0)*rIn);
+  cx.arc(ctr.x,ctr.y,rOut,a0,a1);
+  cx.arc(ctr.x,ctr.y,rIn,a1,a0,true);
+  cx.closePath();
+  cx.fillStyle=hex2rgba(color,fillA);cx.fill();
+  cx.strokeStyle=hex2rgba(color,strokeA);cx.lineWidth=0.7;cx.stroke();
+}
+
+// ═══════════════════════════════════
+// PIE RENDER (sectors + center button)
+// ═══════════════════════════════════
+function drawPie(){
+  cx.clearRect(0,0,CVS.width,CVS.height);
+  drawSectors();
+  drawCenterButton();
+}
+
+function drawCenterButton(){
+  const ctr=w2s(0,0);
+  const r=PIE_R*vp.s*0.52;
+  const name=S.projectName||'DevLog';
+  // radial glow
+  const grad=cx.createRadialGradient(ctr.x,ctr.y,0,ctr.x,ctr.y,r*1.5);
+  grad.addColorStop(0,'rgba(74,158,255,0.10)');
+  grad.addColorStop(1,'rgba(74,158,255,0)');
+  cx.beginPath();cx.arc(ctr.x,ctr.y,r*1.5,0,Math.PI*2);
+  cx.fillStyle=grad;cx.fill();
+  // ring
+  cx.beginPath();cx.arc(ctr.x,ctr.y,r,0,Math.PI*2);
+  cx.strokeStyle='rgba(74,158,255,0.4)';cx.lineWidth=1.2;cx.stroke();
+  // label
+  const fz=Math.max(9,Math.min(15,r*0.32));
+  cx.font=`700 ${fz}px Noto Sans TC,sans-serif`;
+  cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillStyle='rgba(200,212,232,0.9)';
+  const maxW=r*1.7;
+  let label=name;
+  while(cx.measureText(label).width>maxW&&label.length>2)label=label.slice(0,-1);
+  if(label!==name)label=label.slice(0,-1)+'…';
+  cx.fillText(label,ctr.x,ctr.y);
+}
+
+// 圓心點擊檢測
+CVS.addEventListener('click',e=>{
+  if(viewMode!=='pie')return;
+  const rect=CVS.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const ctr=w2s(0,0);
+  const r=PIE_R*vp.s*0.52;
+  const dist=Math.hypot(mx-ctr.x,my-ctr.y);
+  if(dist<=r){openThemeModal();}
+});
+CVS.addEventListener('touchend',e=>{
+  if(viewMode!=='pie')return;
+  if(e.changedTouches.length!==1)return;
+  const rect=CVS.getBoundingClientRect();
+  const mx=e.changedTouches[0].clientX-rect.left;
+  const my=e.changedTouches[0].clientY-rect.top;
+  const ctr=w2s(0,0);
+  const r=PIE_R*vp.s*0.52;
+  if(Math.hypot(mx-ctr.x,my-ctr.y)<=r){e.preventDefault();openThemeModal();}
+},{passive:false});
+// hover cursor for center
+CVS.addEventListener('mousemove',e=>{
+  if(viewMode!=='pie'){CVS.style.cursor='';return;}
+  const rect=CVS.getBoundingClientRect();
+  const ctr=w2s(0,0);
+  const r=PIE_R*vp.s*0.52;
+  CVS.style.cursor=Math.hypot(e.clientX-rect.left-ctr.x,e.clientY-rect.top-ctr.y)<=r?'pointer':'';
+});
+
+function renderLegend(){
+  const mains=S.mainBranches&&S.mainBranches.length?S.mainBranches:S.branches;
+  document.getElementById('branch-legend').innerHTML=mains.map((b,i)=>{
+    const counts=computeBranchStatusCounts(b.id);
+    const hasCounts=counts.pending||counts.warning||counts.failed||counts.done;
+    const mkLC=(status,count)=>{
+      if(!count)return`<span class="lc ${STATUS_META[status].lcCls} dim">—</span>`;
+      return`<span class="lc ${STATUS_META[status].lcCls}" onclick="event.stopPropagation();openStatusPopout('${b.id}','${status}',this)" title="${STATUS_META[status].label}: ${count}">${STATUS_META[status].label.split(' ')[0]}${count}</span>`;
+    };
+    return`<div class="legend-item" onclick="flashBranch('${b.id}')">
+      <div class="legend-dot" style="background:${b.color}"></div>
+      <span><b style="color:${b.color};margin-right:4px;">${HAN_NUM[i]||i+1}</b>${b.name.replace(/^[一二三四五六七八九十]+[.．、\s]*/,'')}</span>
+      <div class="legend-counts">
+        ${mkLC('pending',counts.pending)}
+        ${mkLC('warning',counts.warning)}
+        ${mkLC('failed',counts.failed)}
+        ${mkLC('done',counts.done)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function fullRender(){drawPie();renderLegend();}
+
+
+
+// ═══════════════════════════════════
+// NODE CLICK
+// ═══════════════════════════════════
+function onNodeClick(id){
+  selectedId=id;openPanel(id);hideCtx();_scheduleRender();
+}
+
+// ═══════════════════════════════════
+// PANEL
+// ═══════════════════════════════════
+function openPanel(id){
+  navPush(id);_renderPanel(id);
+}
+function _renderPanel(id){
+  const nd=node(id);if(!nd)return;
+  document.getElementById('panel').classList.add('open');
+  const col=nodeColor(nd);
+  document.getElementById('panel-color-dot').style.background=col;
+  document.getElementById('panel-title').value=nd.title;
+  document.getElementById('panel-meta').textContent=`ID: ${id}  ·  子節點: ${nd.children.length}`;
+  document.getElementById('f-objective').value=nd.objective||'';
+  document.getElementById('f-action').value=nd.action||'';
+  document.getElementById('f-result').value=nd.result||'';
+  document.getElementById('f-failure').value=nd.failure||'';
+  document.getElementById('f-next').value=nd.next||'';
+  const sel=document.getElementById('branch-select');
+  // branch-select 顯示三層版塊結構
+  let branchOpts='<option value="">（無）</option>';
+  (S.mainBranches||[]).forEach(m=>{
+    branchOpts+=`<optgroup label="${m.name}">`;
+    (S.subBranches||[]).filter(s=>s.mainId===m.id).forEach(s=>{
+      branchOpts+=`<optgroup label="　${s.name}">`;
+      (S.leafBranches||[]).filter(l=>l.subId===s.id).forEach(l=>{
+        branchOpts+=`<option value="${l.id}"${nd.branchId===l.id?' selected':''}>${l.name}</option>`;
+      });
+      branchOpts+=`<option value="${s.id}"${nd.branchId===s.id?' selected':''}>（直屬 ${s.name}）</option>`;
+      branchOpts+='</optgroup>';
+    });
+    branchOpts+=`<option value="${m.id}"${nd.branchId===m.id?' selected':''}>（直屬 ${m.name}）</option>`;
+    branchOpts+='</optgroup>';
+  });
+  sel.innerHTML=branchOpts;
+  renderTags(nd);renderImages(nd);renderFiles(nd);renderFails(nd);updateNavBtns();
+  _updatePanelLogStatus(nd);
+  _refreshStatusBar(nd);
+  dcOnPanelOpen();
+}
+
+function _updatePanelLogStatus(nd){
+  const bar=document.getElementById('panel-log-status');
+  const badge=document.getElementById('panel-log-badge');
+  const addBtn=document.getElementById('panel-add-secondary-btn');
+  const promBtn=document.getElementById('panel-promote-btn');
+  if(!bar)return;
+  if(nd.isHiddenFolder){bar.style.display='none';return;}
+  if(nd.isPrimaryLog){
+    bar.style.display='flex';
+    badge.innerHTML='<span style="background:rgba(74,158,255,.15);color:var(--accent);border:1px solid rgba(74,158,255,.3);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;">★ 主日誌</span>';
+    addBtn.style.display='';
+    promBtn.style.display='none';
+  } else if(nd.isSecondaryLog){
+    bar.style.display='flex';
+    badge.innerHTML='<span style="background:rgba(245,197,66,.1);color:var(--gold);border:1px solid rgba(245,197,66,.25);padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;">◎ 副日誌</span>';
+    addBtn.style.display='none';
+    promBtn.style.display='';
+  } else {
+    bar.style.display='none';
+  }
+}
+function closePanel(){
+  const panel=document.getElementById('panel');
+  panel.classList.remove('open');
+  document.getElementById('folder-backdrop').classList.remove('active');
+  selectedId=null;
+  if(viewMode!=='folder'){
+    setTimeout(()=>{resize();},230);
+  }
+}
+document.getElementById('panel-title').addEventListener('input',onFieldChange);
+function onFieldChange(){
+  const nd=node(selectedId);if(!nd)return;
+  nd.title=document.getElementById('panel-title').value;
+  nd.objective=document.getElementById('f-objective').value;
+  nd.action=document.getElementById('f-action').value;
+  nd.result=document.getElementById('f-result').value;
+  nd.failure=document.getElementById('f-failure').value;
+  nd.next=document.getElementById('f-next').value;
+  nd.branchId=document.getElementById('branch-select').value||null;
+  save();
+  renderLegend();
+  if(viewMode==='folder')renderFolderView();
+}
+
+// Tags
+function renderTags(nd){
+  const w=document.getElementById('tags-wrap'),inp=document.getElementById('tag-input');
+  w.innerHTML='';
+  (nd.tags||[]).forEach((t,i)=>{
+    const d=document.createElement('div');d.className='tag';
+    d.innerHTML=`${t}<span class="tag-del" onclick="removeTag(${i})">×</span>`;w.appendChild(d);
+  });
+  w.appendChild(inp);
+}
+function onTagKey(e){if(e.key!=='Enter'&&e.key!==',')return;e.preventDefault();const v=e.target.value.trim().replace(',','');if(!v||!selectedId)return;const nd=node(selectedId);nd.tags=nd.tags||[];nd.tags.push(v);e.target.value='';renderTags(nd);save();}
+function removeTag(i){const nd=node(selectedId);nd.tags.splice(i,1);renderTags(nd);save();}
+
+// Images
+function renderImages(nd){
+  const w=document.getElementById('images-wrap');
+  w.innerHTML=(nd.images||[]).map((s,i)=>`<img class="img-thumb" src="${s}" onclick="openLb('${s}')"/>`).join('')+
+    `<div class="img-add" onclick="document.getElementById('img-input').click()">＋</div>
+     <input id="img-input" type="file" accept="image/*" multiple style="display:none" onchange="handleImgUpload(event)"/>`;
+}
+function handleImgUpload(e){
+  const nd=node(selectedId);if(!nd)return;nd.images=nd.images||[];
+  let done=0;const files=[...e.target.files];
+  files.forEach(f=>{const r=new FileReader();r.onload=ev=>{nd.images.push(ev.target.result);if(++done===files.length){renderImages(nd);save();}};r.readAsDataURL(f);});
+  e.target.value='';
+}
+
+// Files
+function fmtSz(b){return b<1024?b+'B':b<1048576?(b/1024).toFixed(1)+'KB':(b/1048576).toFixed(1)+'MB';}
+function fIcon(name){const e=name.split('.').pop().toLowerCase();return{js:'📜',ts:'📜',html:'🌐',css:'🎨',json:'📋',md:'📝',txt:'📄',pdf:'📕',zip:'📦',png:'🖼',jpg:'🖼'}[e]||'📎';}
+function renderFiles(nd){
+  const w=document.getElementById('files-wrap');
+  w.innerHTML=(nd.files||[]).map((f,i)=>`
+    <div class="file-item">
+      <span>${fIcon(f.name)}</span>
+      <span class="file-name" title="${f.name}">${f.name}</span>
+      <span class="file-sz">${f.size}</span>
+      <span class="file-del" onclick="removeFile(${i})">×</span>
+    </div>`).join('')+
+    `<div class="file-add" onclick="document.getElementById('file-input').click()">＋ 附加檔案</div>
+     <input id="file-input" type="file" multiple style="display:none" onchange="handleFileUpload(event)"/>`;
+}
+function handleFileUpload(e){
+  const nd=node(selectedId);if(!nd)return;nd.files=nd.files||[];
+  let done=0;const files=[...e.target.files];
+  files.forEach(f=>{const r=new FileReader();r.onload=ev=>{nd.files.push({name:f.name,size:fmtSz(f.size),data:ev.target.result});if(++done===files.length){renderFiles(nd);save();}};r.readAsDataURL(f);});
+  e.target.value='';
+}
+function removeFile(i){const nd=node(selectedId);nd.files.splice(i,1);renderFiles(nd);save();}
+
+// Fails
+function renderFails(nd){
+  const inh=getAncestorFails(nd.id);
+  let html=(nd.fails||[]).map((f,i)=>`
+    <div class="fail-item">
+      <span class="fail-x">✕</span>
+      <span style="flex:1">${f}</span>
+      <span class="fail-del" onclick="removeFail(${i})">×</span>
+    </div>`).join('');
+  if(inh.length){
+    html+=inh.map(af=>af.fails.map(f=>`
+    <div class="fail-item inherited">
+      <span class="fail-x">✕</span>
+      <div style="flex:1"><div>${f}</div><div class="fail-from">⛔ 此路不通 ── 繼承自「${af.from}」</div></div>
+    </div>`).join('')).join('');
+  }
+  document.getElementById('fail-list').innerHTML=html;
+}
+function addFail(){
+  const inp=document.getElementById('fail-input');const v=inp.value.trim();if(!v||!selectedId)return;
+  const nd=node(selectedId);nd.fails=nd.fails||[];nd.fails.push(v);inp.value='';
+  renderFails(nd);save();
+  if(viewMode==='folder')renderFolderView();
+}
+function removeFail(i){
+  const nd=node(selectedId);nd.fails.splice(i,1);renderFails(nd);save();
+}
+
+function addChildFromPanel(){
+  if(!selectedId)return;
+  const nd=node(selectedId);if(!nd)return;
+  showPrompt('子日誌標題','這次更新的主軸',t=>addNodeTo(t,selectedId));
+}
+function deleteSelected(){
+  if(!selectedId||selectedId==='root')return;
+  const nd=node(selectedId);if(!nd)return;
+  if(nd.isPrimaryLog){
+    deletePrimaryLog(selectedId);
+  } else {
+    if(!confirm('確認刪除此節點及所有子節點？'))return;
+    deleteNode(selectedId);
+  }
+}
+
+function deletePrimaryLog(id){
+  const nd=node(id);if(!nd||!nd.isPrimaryLog)return;
+  const hasDescendants=(nd.children||[]).filter(cid=>{
+    const c=node(cid);return c&&!c.isHiddenFolder;
+  }).length>0||_hasDeepChildren(id);
+  if(hasDescendants){
+    const ans=confirm('是否同時清除所有子鏈？\n\n確定：往下遞迴（版塊主日誌僅清空，普通日誌直接刪除）\n取消：僅清空本日誌內容');
+    if(ans){
+      _clearChain(id);
+    } else {
+      _clearNodeData(id);
+    }
+  } else {
+    _clearNodeData(id);
+  }
+  _renderPanel(id);
+  fullRender();save();
+  if(viewMode==='folder')renderFolderView();
+  toast('主日誌已清空');
+}
+
+function _hasDeepChildren(id){
+  const nd=node(id);if(!nd)return false;
+  for(const cid of(nd.children||[])){
+    const c=node(cid);if(!c||c.isHiddenFolder)continue;
+    return true;
+  }
+  return false;
+}
+
+function _clearNodeData(id){
+  const nd=node(id);if(!nd)return;
+  nd.title=_getBranchNameForNode(nd)||nd.title;
+  nd.objective='';nd.action='';nd.result='';nd.failure='';
+  nd.next='';nd.tags=[];nd.fails=[];nd.images=[];nd.files=[];
+}
+
+function _getBranchNameForNode(nd){
+  const allBr=[...(S.mainBranches||[]),...(S.subBranches||[])];
+  return allBr.find(b=>b.id===nd.branchId)?.name||null;
+}
+
+function _clearChain(id){
+  const nd=node(id);if(!nd)return;
+  if(nd.isPrimaryLog){
+    _clearNodeData(id);
+  }
+  (nd.children||[]).slice().forEach(cid=>{
+    const c=node(cid);if(!c||c.isHiddenFolder)return;
+    if(c.isPrimaryLog){
+      _clearChain(cid); // recurse: clear primary logs, delete normal nodes under them
+    } else {
+      // normal log: delete entirely
+      _deepDeleteNode(cid,id);
+    }
+  });
+}
+
+function _deepDeleteNode(id,parentId){
+  const nd=node(id);if(!nd)return;
+  // recurse children first
+  (nd.children||[]).slice().forEach(cid=>_deepDeleteNode(cid,id));
+  // remove from parent
+  const p=node(parentId);if(p)p.children=p.children.filter(x=>x!==id);
+  S.nodes=S.nodes.filter(n=>n.id!==id);
+  if(selectedId===id)closePanel();
+}
+
+// ═══════════════════════════════════
+// NODE OPS
+// ═══════════════════════════════════
+function addNodeTo(title,parentId,branchId){
+  const parent=node(parentId);if(!parent)return;
+  const id='n'+Date.now();
+  S.nodes.push({id,title,isRoot:false,branchId:branchId||parent.branchId||null,
+    objective:'',action:'',result:'',failure:'',next:'',tags:[],fails:[],images:[],files:[],children:[],parentId,status:'pending'});
+  parent.children.push(id);
+  fullRender();save();selectedId=id;openPanel(id);
+  if(viewMode==='folder')renderFolderView();
+}
+function deleteNode(id){
+  const nd=node(id);if(!nd||nd.isRoot)return;
+  const p=node(nd.parentId);if(p)p.children=p.children.filter(c=>c!==id);
+  const del=[id];const collect=nid=>{const n=node(nid);if(n)n.children.forEach(c=>{del.push(c);collect(c);});};collect(id);
+  S.nodes=S.nodes.filter(n=>!del.includes(n.id));
+  if(del.includes(selectedId))closePanel();
+  fullRender();save();
+  if(viewMode==='folder')renderFolderView();
+}
+function reparent(id,newParentId){
+  const nd=node(id);if(!nd||id==='root'||id===newParentId)return;
+  // 防止移動到自己的子孫節點（循環檢查）
+  let c=newParentId;while(c){if(c===id){toast('無法移動到自己的子節點');return;}c=node(c)?.parentId;}
+  // 從舊 parent 的 children 移除
+  const op=node(nd.parentId);if(op)op.children=op.children.filter(x=>x!==id);
+  // 掛到新 parent
+  const np=node(newParentId);if(!np)return;
+  np.children.push(id);
+  nd.parentId=newParentId;
+  // 整棵子樹繼承新 parent 的 branchId（如同資料夾剪下貼上）
+  const newBranch=newParentId==='root'?nd.branchId:np.branchId;
+  function propagateBranch(nid,bid){
+    const n=node(nid);if(!n)return;
+    n.branchId=bid;
+    n.children.forEach(cid=>propagateBranch(cid,bid));
+  }
+  propagateBranch(id,newBranch);
+  fullRender();save();toast('已移動');
+}
+
+// ═══════════════════════════════════
+// BRANCH DETAIL MODAL
+// ═══════════════════════════════════
+function showBranchDetail(tier,id,e){
+  e&&e.stopPropagation();
+  let item,tierLabel,tierColor;
+  if(tier==='main'){
+    item=S.mainBranches.find(b=>b.id===id);
+    tierLabel='L1 主版塊 — 戰略領域';tierColor='var(--accent)';
+  } else if(tier==='sub'){
+    item=S.subBranches.find(b=>b.id===id);
+    tierLabel='L2 次版塊 — 系統模塊';tierColor='var(--green)';
+  } else {
+    item=S.leafBranches.find(b=>b.id===id);
+    tierLabel='L3 第三層 — 可執行單元';tierColor='var(--gold)';
+  }
+  if(!item)return;
+  document.getElementById('bd-dot').style.background=item.color;
+  document.getElementById('bd-tier').textContent=tierLabel;
+  document.getElementById('bd-tier').style.background=tierColor==='var(--accent)'?'rgba(74,158,255,.15)':tierColor==='var(--green)'?'rgba(61,220,132,.15)':'rgba(245,197,66,.15)';
+  document.getElementById('bd-tier').style.color=tierColor;
+  document.getElementById('bd-name').textContent=item.name;
+  // Definition
+  document.getElementById('bd-definition').textContent=item.definition||'（尚未定義）';
+  // I/O — only for sub/leaf
+  const ioSection=document.getElementById('bd-io-section');
+  if(tier==='main'){
+    ioSection.style.display='none';
+  } else {
+    ioSection.style.display='';
+    document.getElementById('bd-inputs').textContent=(item.inputs||[]).join('\n')||'（未定義）';
+    document.getElementById('bd-outputs').textContent=(item.outputs||[]).join('\n')||'（未定義）';
+  }
+  // Constraints
+  document.getElementById('bd-constraints').textContent=(item.constraints||[]).join('\n')||'（未定義）';
+  // 開啟主日誌按鈕
+  const plId=getBranchPrimaryLogId(item.id);
+  const bdBtn=document.getElementById('bd-open-log-btn');
+  if(bdBtn&&plId){
+    bdBtn.style.display='';
+    bdBtn.onclick=()=>{closeModal('modal-branch-detail');selectedId=plId;openPanel(plId);if(viewMode==='folder')document.getElementById('folder-backdrop').classList.add('active');};
+  } else if(bdBtn){bdBtn.style.display='none';}
+  // 編輯按鈕
+  const editBtn=document.getElementById('bd-edit-btn');
+  if(editBtn){editBtn.onclick=()=>{closeModal('modal-branch-detail');editBranch(tier,id,null);};}
+  _openModal('modal-branch-detail');
+}
+
+// ═══════════════════════════════════
+// MANAGE NEW BRANCHES
+// ═══════════════════════════════════
+let _ebTier=null,_ebEditId=null,_ebColor=PALETTE[0];
+function openManageNew(){
+  renderManageNew();
+  _openModal('modal-manage-new');
+}
+function renderManageNew(){
+  const body=document.getElementById('manage-new-body');
+  let html='';
+  (S.mainBranches||[]).forEach(m=>{
+    html+=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);">
+        <div style="width:10px;height:10px;border-radius:50%;background:${m.color};flex-shrink:0;"></div>
+        <span style="font-weight:700;font-size:13px;flex:1;">${m.name}</span>
+        <button class="btn" style="font-size:10px;padding:3px 7px;" onclick="editBranch('main','${m.id}',event)">編輯</button>
+        <button class="btn danger" style="font-size:10px;padding:3px 7px;" onclick="deleteBranch('main','${m.id}')">刪除</button>
+        <button class="btn primary" style="font-size:10px;padding:3px 7px;" onclick="addSubBranch('${m.id}')">＋次版塊</button>
+      </div>`;
+    (S.subBranches||[]).filter(s=>s.mainId===m.id).forEach(s=>{
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px 8px 24px;border-bottom:1px solid var(--border);">
+        <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
+        <span style="font-size:12px;flex:1;color:var(--text2);">${s.name}</span>
+        <button class="btn" style="font-size:10px;padding:2px 6px;" onclick="editBranch('sub','${s.id}',event)">編輯</button>
+        <button class="btn danger" style="font-size:10px;padding:2px 6px;" onclick="deleteBranch('sub','${s.id}')">刪除</button>
+        <button class="btn primary" style="font-size:10px;padding:2px 6px;" onclick="addLeafBranch('${s.id}')">＋第三層</button>
+      </div>`;
+      (S.leafBranches||[]).filter(l=>l.subId===s.id).forEach(l=>{
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px 6px 40px;border-bottom:1px solid var(--border);">
+          <div style="width:7px;height:7px;border-radius:50%;background:${l.color};flex-shrink:0;"></div>
+          <span style="font-size:11px;flex:1;color:var(--text3);">${l.name}</span>
+          <button class="btn" style="font-size:10px;padding:2px 5px;" onclick="editBranch('leaf','${l.id}',event)">編輯</button>
+          <button class="btn danger" style="font-size:10px;padding:2px 5px;" onclick="deleteBranch('leaf','${l.id}')">刪除</button>
+        </div>`;
+      });
+    });
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+function _openEb(title,tier,id,name,definition,color,inputs,outputs,constraints){
+  _ebTier=tier;_ebEditId=id;_ebColor=color||L1_COLORS[0].hex;
+  document.getElementById('eb-title').textContent=title;
+  document.getElementById('eb-name').value=name||'';
+  document.getElementById('eb-definition').value=definition||'';
+  document.getElementById('eb-inputs').value=(inputs||[]).join('\n');
+  document.getElementById('eb-outputs').value=(outputs||[]).join('\n');
+  document.getElementById('eb-constraints').value=(constraints||[]).join('\n');
+  // I/O のみ L2/L3 に表示
+  const isMain=tier==='main'||tier==='main_edit';
+  document.getElementById('eb-io-wrap').style.display=isMain?'none':'block';
+  const hint=document.getElementById('eb-constraints-hint');
+  if(hint)hint.textContent=isMain?'全域約束（每行一條）':'局部約束（每行一條，必須可測試）';
+  _renderEbSwatches();
+  _openModal('modal-edit-branch');
+}
+
+function _renderEbSwatches(){
+  const sw=document.getElementById('eb-swatches');
+  const tier=_ebTier;
+
+  if(tier==='main'||tier==='main_edit'){
+    // ── L1：10個族，每族顯示代表色 + 族名，單行橫排 ──
+    // 選中的族展開顯示該族10個L2色
+    const selIdx=findColorIdx(_ebColor);
+    let html=`<div style="margin-bottom:6px;">
+      <div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">選擇色族（主版塊代表色）</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+    L1_COLORS.forEach((c,i)=>{
+      const isSel=selIdx===i;
+      html+=`<div onclick="selectL1Family(${i})" title="${c.name}"
+        style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 5px;border-radius:6px;
+        border:2px solid ${isSel?'#fff':'transparent'};background:${isSel?'rgba(255,255,255,.08)':'transparent'};transition:all .15s;">
+        <div style="width:22px;height:22px;border-radius:50%;background:${c.hex};box-shadow:${isSel?'0 0 8px '+c.hex:'none'};"></div>
+        <div style="font-size:8px;color:${isSel?'#fff':'var(--text3)'};white-space:nowrap;">${c.name}</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+    // 展開選中族的L2同族色
+    const variants=L2_VARIANTS[L1_COLORS[selIdx].id]||[];
+    html+=`<div>
+      <div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">同族鄰近色（次版塊可用）</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+    // L1代表色也放第一個
+    html+=`<div class="color-swatch${_ebColor===L1_COLORS[selIdx].hex?' sel':''}" title="${L1_COLORS[selIdx].name}（基準）" style="background:${L1_COLORS[selIdx].hex}" onclick="selectEbColor('${L1_COLORS[selIdx].hex}',this)"></div>`;
+    variants.forEach(hex=>{
+      html+=`<div class="color-swatch${_ebColor===hex?' sel':''}" style="background:${hex}" onclick="selectEbColor('${hex}',this)"></div>`;
+    });
+    html+=`</div></div>`;
+    // L3深淺預覽
+    const shades=L3_SHADES[L1_COLORS[selIdx].id]||[];
+    html+=`<div style="margin-top:8px;">
+      <div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">深淺階（第三層可用）</div>
+      <div style="display:flex;gap:5px;">`;
+    shades.forEach((hex,i)=>{
+      html+=`<div class="color-swatch${_ebColor===hex?' sel':''}" title="深淺 ${i+1}" style="background:${hex};border-radius:4px;width:20px;height:20px;" onclick="selectEbColor('${hex}',this)"></div>`;
+    });
+    html+=`</div></div>`;
+    sw.innerHTML=html;
+
+  } else if(tier==='sub'||tier==='sub_edit'){
+    // ── L2：顯示父族的10個同族鄰近色，橫排 ──
+    const parentMain = tier==='sub_edit'
+      ? (S.mainBranches||[]).find(m=>m.id===(S.subBranches||[]).find(s=>s.id===_ebEditId)?.mainId)
+      : (S.mainBranches||[]).find(m=>m.id===_ebEditId);
+    const colorId=parentMain?.colorId||'blue';
+    const l1=L1_COLORS.find(c=>c.id===colorId);
+    const variants=L2_VARIANTS[colorId]||[];
+    let html=`<div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">
+      同族鄰近色 ── <span style="color:${l1?.hex||'#fff'}">${l1?.name||colorId}</span> 色族
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+    html+=`<div class="color-swatch${_ebColor===l1?.hex?' sel':''}" title="${l1?.name}（族基準色）" style="background:${l1?.hex};outline:1px dashed rgba(255,255,255,.3);outline-offset:2px;" onclick="selectEbColor('${l1?.hex}',this)"></div>`;
+    variants.forEach(hex=>{
+      html+=`<div class="color-swatch${_ebColor===hex?' sel':''}" style="background:${hex}" onclick="selectEbColor('${hex}',this)"></div>`;
+    });
+    html+=`</div>`;
+    sw.innerHTML=html;
+
+  } else {
+    // ── L3：顯示父族深淺8階，自動分配但可預覽選擇 ──
+    const parentSub = tier==='leaf_edit'
+      ? (S.subBranches||[]).find(s=>s.id===(S.leafBranches||[]).find(l=>l.id===_ebEditId)?.subId)
+      : (S.subBranches||[]).find(s=>s.id===_ebEditId);
+    const parentMain=(S.mainBranches||[]).find(m=>m.id===parentSub?.mainId);
+    const colorId=parentMain?.colorId||'gray';
+    const l1=L1_COLORS.find(c=>c.id===colorId);
+    const shades=L3_SHADES[colorId]||[];
+    let html=`<div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">
+      深淺階 ── <span style="color:${l1?.hex||'#fff'}">${l1?.name||colorId}</span> 色族（深→淺，自動依序分配）
+    </div>
+    <div style="display:flex;gap:6px;align-items:flex-end;">`;
+    shades.forEach((hex,i)=>{
+      const sz=16+i*2; // 深的小、淺的大，視覺強調漸變
+      html+=`<div onclick="selectEbColor('${hex}',this)" title="深淺 ${i+1}" style="
+        width:${sz}px;height:${sz}px;border-radius:4px;background:${hex};cursor:pointer;
+        border:2px solid ${_ebColor===hex?'#fff':'transparent'};
+        box-shadow:${_ebColor===hex?'0 0 6px '+hex:'none'};
+        transition:all .15s;flex-shrink:0;"></div>`;
+    });
+    html+=`</div>`;
+    sw.innerHTML=html;
+  }
+}
+
+function selectL1Family(idx){
+  // 選了一個色族，預設選中L1代表色，並刷新選色器
+  _ebColor=L1_COLORS[idx].hex;
+  _renderEbSwatches();
+}
+function findColorIdById(hex){
+  if(!hex)return'gray';
+  const h=hex.toLowerCase();
+  for(const c of L1_COLORS){if(c.hex===h)return c.id;}
+  return'gray';
+}
+function selectEbColor(c,el){
+  _ebColor=c;
+  _renderEbSwatches();
+}
+function addMainBranch(){
+  const defaultColor=L1_COLORS[(S.mainBranches||[]).length % L1_COLORS.length].hex;
+  _openEb('新增主版塊 (L1)','main',null,'','',defaultColor,[],[],[]);
+}
+function addSubBranch(mainId){
+  const main=(S.mainBranches||[]).find(m=>m.id===mainId);
+  const colorId=main?.colorId||findColorIdById(main?.color)||'blue';
+  const existingSubs=(S.subBranches||[]).filter(s=>s.mainId===mainId);
+  const variants=L2_VARIANTS[colorId]||L2_VARIANTS.blue;
+  const defaultColor=variants[existingSubs.length % variants.length];
+  _openEb('新增次版塊 (L2)','sub',mainId,'','',defaultColor,[],[],[]);
+  _ebEditId=mainId;
+}
+function addLeafBranch(subId){
+  const sub=(S.subBranches||[]).find(s=>s.id===subId);
+  const main=(S.mainBranches||[]).find(m=>m.id===sub?.mainId);
+  const colorId=main?.colorId||'gray';
+  const existingLeaves=(S.leafBranches||[]).filter(l=>l.subId===subId);
+  const defaultColor=getShadeColor(colorId, existingLeaves.length);
+  _openEb('新增第三層版塊 (L3)','leaf',subId,'','',defaultColor,[],[],[]);
+  _ebEditId=subId;
+}
+function editBranch(tier,id,e){
+  e&&e.stopPropagation();
+  let arr=tier==='main'?S.mainBranches:tier==='sub'?S.subBranches:S.leafBranches;
+  const item=arr.find(b=>b.id===id);if(!item)return;
+  _openEb('編輯版塊',tier+'_edit',id,item.name,item.definition||'',item.color,item.inputs||[],item.outputs||[],item.constraints||[]);
+  _ebEditId=id;
+}
+function _createBranchPrimaryLog(branchId,tier,desc,mainBranchId){
+  const nid='pl_'+branchId+'_'+Date.now();
+  const fid='hf_'+branchId+'_'+Date.now()+'x';
+  const parentId=tier==='sub'?(getBranchPrimaryLogId(mainBranchId)||'root'):'root';
+  const arr=tier==='main'?S.mainBranches:S.subBranches;
+  const brItem=arr.find(b=>b.id===branchId);
+  // Primary log node
+  S.nodes.push({
+    id:nid,title:brItem?brItem.name:'',isRoot:false,isPrimaryLog:true,branchId:branchId,
+    parentId,objective:desc||'',action:'',result:'',failure:'',
+    next:'',tags:[],fails:[],images:[],files:[],children:[],
+  });
+  const parent=node(parentId);if(parent&&!parent.children.includes(nid))parent.children.push(nid);
+  // Hidden folder node (under primary log)
+  S.nodes.push({
+    id:fid,title:'[副日誌]',isRoot:false,isHiddenFolder:true,branchId:branchId,
+    parentId:nid,objective:'',action:'',result:'',failure:'',
+    next:'',tags:[],fails:[],images:[],files:[],children:[],
+  });
+  const pl=node(nid);if(pl&&!pl.children.includes(fid))pl.children.push(fid);
+  if(brItem){brItem.primaryLogId=nid;brItem.hiddenFolderId=fid;}
+}
+
+function confirmEditBranch(){
+  const name=document.getElementById('eb-name').value.trim();
+  const definition=document.getElementById('eb-definition').value.trim();
+  const inputsRaw=document.getElementById('eb-inputs').value.trim();
+  const outputsRaw=document.getElementById('eb-outputs').value.trim();
+  const constraintsRaw=document.getElementById('eb-constraints').value.trim();
+  const inputs=inputsRaw?inputsRaw.split('\n').map(s=>s.trim()).filter(Boolean):[];
+  const outputs=outputsRaw?outputsRaw.split('\n').map(s=>s.trim()).filter(Boolean):[];
+  const constraints=constraintsRaw?constraintsRaw.split('\n').map(s=>s.trim()).filter(Boolean):[];
+  if(!name){toast('請輸入名稱');return;}
+  if(_ebTier==='main'){
+    const id='m'+Date.now();
+    const ci=findColorIdx(_ebColor);
+    const colorId=L1_COLORS[ci].id;
+    const col=_ebColor;
+    if(!S.mainBranches)S.mainBranches=[];
+    S.mainBranches.push({id,name,colorIdx:ci,colorId,color:col,definition,constraints,primaryLogId:null,hiddenFolderId:null});
+    S.branches.push({id,name,color:col});
+    _createBranchPrimaryLog(id,'main',definition);
+  } else if(_ebTier==='sub'){
+    const id='s'+Date.now();
+    const main=(S.mainBranches||[]).find(m=>m.id===_ebEditId);
+    const ci=main?main.colorIdx:findColorIdx(_ebColor);
+    const col=_ebColor;
+    if(!S.subBranches)S.subBranches=[];
+    const subColorId=main?.colorId||L1_COLORS[ci%L1_COLORS.length].id;
+    S.subBranches.push({id,mainId:_ebEditId,colorIdx:ci,colorId:subColorId,name,color:col,definition,inputs,outputs,constraints,primaryLogId:null,hiddenFolderId:null});
+    _createBranchPrimaryLog(id,'sub',definition,_ebEditId);
+  } else if(_ebTier==='leaf'){
+    const id='l'+Date.now();
+    const sub=(S.subBranches||[]).find(s=>s.id===_ebEditId);
+    const main=(S.mainBranches||[]).find(m=>m.id===sub?.mainId);
+    const colorId=main?.colorId||'gray';
+    const ci=main?main.colorIdx:findColorIdx(_ebColor);
+    const existingLeaves=(S.leafBranches||[]).filter(l=>l.subId===_ebEditId);
+    const col=getShadeColor(colorId, existingLeaves.length);
+    if(!S.leafBranches)S.leafBranches=[];
+    S.leafBranches.push({id,subId:_ebEditId,colorIdx:ci,colorId,name,color:col,definition,inputs,outputs,constraints});
+  } else if(_ebTier.endsWith('_edit')){
+    const tier=_ebTier.replace('_edit','');
+    const arr=tier==='main'?S.mainBranches:tier==='sub'?S.subBranches:S.leafBranches;
+    const item=arr.find(b=>b.id===_ebEditId);
+    if(item){
+      item.name=name;item.definition=definition;item.constraints=constraints;
+      if(tier!=='main'){item.inputs=inputs;item.outputs=outputs;}
+      if(tier==='main'){
+        const ci=findColorIdx(_ebColor);
+        item.color=_ebColor;item.colorIdx=ci;item.colorId=L1_COLORS[ci].id;
+      } else if(tier==='sub'){
+        item.color=_ebColor;
+      }
+    }
+    if(tier==='main'){const b=S.branches.find(b=>b.id===_ebEditId);if(b){b.name=name;b.color=item?.color||_ebColor;}}
+  }
+  closeModal('modal-edit-branch');
+  syncBranchesToMain();save();renderManageNew();
+  if(viewMode==='folder')renderFolderView();
+  if(viewMode==='pie')fullRender();
+  toast('已儲存');
+}
+function deleteBranch(tier,id){
+  if(!confirm('確認刪除此版塊？'))return;
+  if(tier==='main'){
+    S.mainBranches=(S.mainBranches||[]).filter(b=>b.id!==id);
+    S.branches=S.branches.filter(b=>b.id!==id);
+    S.subBranches=(S.subBranches||[]).filter(b=>b.mainId!==id);
+  } else if(tier==='sub'){
+    S.subBranches=(S.subBranches||[]).filter(b=>b.id!==id);
+    S.leafBranches=(S.leafBranches||[]).filter(b=>b.subId!==id);
+  } else {
+    S.leafBranches=(S.leafBranches||[]).filter(b=>b.id!==id);
+  }
+  syncBranchesToMain();save();renderManageNew();
+  if(viewMode==='folder')renderFolderView();
+  if(viewMode==='pie')fullRender();
+  toast('已刪除');
+}
+
+// ═══════════════════════════════════
+// THREE-TIER renderFolderView
+// ═══════════════════════════════════
+function renderFolderViewNew(){
+  const fv=document.getElementById('folder-view');
+  let html=`<div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+    <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="foldAllNew(true)">⊞ 全部展開</button>
+    <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="foldAllNew(false)">⊟ 全部收起</button>
+    <div style="flex:1;"></div>
+    <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="openManageNew()">⊞ 管理版塊</button>
+  </div>`;
+
+  (S.mainBranches||[]).forEach(m=>{
+    const subs=(S.subBranches||[]).filter(s=>s.mainId===m.id);
+    const _mainPL=node(getBranchPrimaryLogId(m.id));
+    html+=`<div class="main-section">
+      <div class="main-header" onclick="toggleTier('mb-${m.id}',this,'main-chevron')">
+        <div class="main-dot" style="background:${m.color}"></div>
+        <div class="main-name" style="flex:1;">${m.name}</div>
+        <button class="main-info-btn" onclick="showBranchDetail('main','${m.id}',event)">詳情</button>
+        <button class="tier-log-btn" onclick="openPrimaryLog('${m.id}',event)">★ 主日誌</button>
+        <div class="main-chevron">▶</div>
+      </div>
+      <div class="main-body" id="mb-${m.id}">
+      ${_mainPL?`<div style="padding:6px 10px;border-bottom:1px solid var(--border);background:rgba(74,158,255,.04);">${renderFolderNodeNew(_mainPL)}</div>`:''}`;
+
+    subs.forEach(s=>{
+      const leaves=(S.leafBranches||[]).filter(l=>l.subId===s.id);
+      const _subPL=node(getBranchPrimaryLogId(s.id));
+      html+=`<div class="sub-section">
+        <div class="sub-header" onclick="toggleTier('sb-${s.id}',this,'sub-chevron')">
+          <div class="sub-dot" style="background:${s.color}"></div>
+          <div class="sub-name" style="flex:1;">${s.name}</div>
+          <button class="sub-info-btn" onclick="showBranchDetail('sub','${s.id}',event)">詳情</button>
+          <button class="tier-log-btn" onclick="openPrimaryLog('${s.id}',event)">★ 主日誌</button>
+          <div class="sub-chevron">▶</div>
+        </div>
+        <div class="sub-body" id="sb-${s.id}">
+        ${_subPL?`<div style="padding:4px 8px 4px 28px;border-bottom:1px solid var(--border);background:rgba(74,158,255,.04);">${renderFolderNodeNew(_subPL)}</div>`:''}`;
+
+      leaves.forEach(l=>{
+        const lNodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===l.id&&!n.isHiddenFolder);
+        html+=`<div class="leaf-section">
+          <div class="leaf-header" onclick="toggleTier('lb-${l.id}',this,'leaf-chevron')">
+            <div class="leaf-dot" style="background:${l.color}"></div>
+            <div class="leaf-name" style="flex:1;">${l.name}</div>
+            <button class="leaf-info-btn" onclick="showBranchDetail('leaf','${l.id}',event)">詳情</button>
+            <button class="tier-log-btn" onclick="openJournal('leaf','${l.id}',event)">日誌</button>
+            <div class="leaf-chevron">▶</div>
+          </div>
+          <div class="leaf-body" id="lb-${l.id}">
+            ${lNodes.length?lNodes.map(n=>renderFolderNodeNew(n)).join(''):'<div style="padding:8px 4px;font-size:11px;color:var(--text3);">尚無日誌</div>'}
+            <div style="padding:4px 0 2px;"><button class="btn" style="font-size:10px;padding:3px 9px;width:100%;" onclick="addNodeToLeaf('${l.id}')">＋ 新增日誌</button></div>
+          </div>
+        </div>`;
+      });
+
+      const subNodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===s.id&&!n.isPrimaryLog&&!n.isHiddenFolder&&!n.isSecondaryLog);
+      if(subNodes.length||!leaves.length){
+        html+=`<div style="padding:6px 8px 6px 44px;border-top:1px solid var(--border);">
+          ${subNodes.map(n=>renderFolderNodeNew(n)).join('')}
+          <button class="btn" style="font-size:10px;padding:3px 9px;margin-top:4px;" onclick="addNodeToSub('${s.id}')">＋ 新增日誌</button>
+        </div>`;
+      }
+      html+='</div></div>';
+    });
+
+    const mainNodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===m.id&&!n.isPrimaryLog&&!n.isHiddenFolder&&!n.isSecondaryLog);
+    if(mainNodes.length){
+      html+=`<div style="padding:8px 12px;border-top:1px solid var(--border);">
+        ${mainNodes.map(n=>renderFolderNodeNew(n)).join('')}
+      </div>`;
+    }
+    html+='</div></div>';
+  });
+
+  fv.innerHTML=html;
+}
+
+function renderFolderNodeNew(nd){
+  if(nd.isHiddenFolder){
+    // 隱藏資料夾：只展示其子節點（副日誌們），本身不顯示
+    return nd.children.map(cid=>{
+      const c=node(cid);
+      return c?`<div style="margin-left:14px;border-left:1px dashed var(--border2);padding-left:6px;">${renderFolderNodeNew(c)}</div>`:'';
+    }).join('');
+  }
+  const col=nodeColor(nd);
+  const hf=hasFail(nd),hi=!hf&&hasAncestorFail(nd.id);
+  let badges='';
+  if(nd.isPrimaryLog)badges+=`<span class="fn-badge" style="background:rgba(74,158,255,.12);color:var(--accent);border:1px solid rgba(74,158,255,.25);">★</span>`;
+  if(nd.isSecondaryLog)badges+=`<span class="fn-badge" style="background:rgba(245,197,66,.1);color:var(--gold);border:1px solid rgba(245,197,66,.2);">◎</span>`;
+  if(nd.status){const sm=STATUS_META[nd.status];badges+=`<span class="fn-badge" style="background:rgba(0,0,0,.15);color:${sm.color};border:1px solid ${sm.color}40;">${sm.label}</span>`;}
+  if(hf)badges+=`<span class="fn-badge fail">✕</span>`;
+  if(hi)badges+=`<span class="fn-badge inherited">!</span>`;
+  const childHtml=nd.children.map(cid=>{
+    const c=node(cid);
+    if(!c)return'';
+    if(c.isHiddenFolder){
+      // 展示隱藏資料夾的子節點（副日誌）
+      return c.children.map(scid=>{
+        const sc=node(scid);
+        return sc?`<div style="margin-left:14px;border-left:1px dashed var(--border2);padding-left:6px;">${renderFolderNodeNew(sc)}</div>`:'';
+      }).join('');
+    }
+    return`<div style="margin-left:14px;border-left:1px solid var(--border);padding-left:6px;">${renderFolderNodeNew(c)}</div>`;
+  }).join('');
+  return`<div class="leaf-node-row" onclick="folderOpenNode('${nd.id}')">
+    <div class="fn-dot" style="background:${col};flex-shrink:0;"></div>
+    <div class="fn-title" style="color:${nd.isPrimaryLog?'var(--text)':'var(--text2)'};font-size:12px;${nd.isPrimaryLog?'font-weight:600;':''};">${nd.title}</div>
+    <div class="fn-badges">${badges}</div>
+  </div>${childHtml}`;
+}
+
+function openPrimaryLog(branchId,e){
+  e&&e.stopPropagation();
+  const plId=getBranchPrimaryLogId(branchId);
+  if(!plId){toast('此版塊尚無主日誌（請重新整理）');return;}
+  if(viewMode==='folder'){
+    folderOpenNode(plId);
+  } else {
+    if(p){vp.x=-p.x*vp.s;vp.y=-p.y*vp.s;}
+    selectedId=plId;openPanel(plId);drawPie();
+  }
+}
+
+function addNodeToLeaf(leafId){
+  const plId=getBranchPrimaryLogId(leafId)||'root';
+  showPrompt('新日誌標題','這次更新的主軸',t=>addNodeTo(t,plId,leafId));
+}
+function addNodeToSub(subId){
+  const plId=getBranchPrimaryLogId(subId)||'root';
+  showPrompt('新日誌標題','這次更新的主軸',t=>addNodeTo(t,plId,subId));
+}
+
+function toggleTier(bodyId,header,chevronClass){
+  const el=document.getElementById(bodyId);
+  const chev=header.querySelector('.'+chevronClass);
+  const isOpen=el.style.display==='block'||el.style.display==='';
+  if(isOpen&&el.style.display!==''){el.style.display='none';if(chev)chev.classList.remove('open');}
+  else{el.style.display='block';if(chev)chev.classList.add('open');}
+}
+function foldAllNew(expand){
+  ['main-body','sub-body','leaf-body'].forEach(cls=>{
+    document.querySelectorAll('#folder-view .'+cls).forEach(el=>el.style.display=expand?'block':'none');
+  });
+  ['main-chevron','sub-chevron','leaf-chevron'].forEach(cls=>{
+    document.querySelectorAll('#folder-view .'+cls).forEach(chev=>chev.classList.toggle('open',expand));
+  });
+}
+
+// ═══════════════════════════════════
+// JOURNAL SYSTEM
+// ═══════════════════════════════════
+let _jmTier=null,_jmSectionId=null;
+
+function openJournal(tier,sectionId,e){
+  e&&e.stopPropagation();
+  _jmTier=tier;_jmSectionId=sectionId;
+  // find section item
+  const arr=tier==='main'?S.mainBranches:tier==='sub'?S.subBranches:S.leafBranches;
+  const item=arr.find(b=>b.id===sectionId);if(!item)return;
+  document.getElementById('jm-dot').style.background=item.color;
+  document.getElementById('jm-name').textContent=item.name;
+  const tierLabel=tier==='main'?'主版塊日誌':tier==='sub'?'次版塊日誌':'第三層日誌';
+  document.getElementById('jm-tier').textContent=tierLabel;
+  document.getElementById('jm-new-title').value='';
+  renderJournalModal();
+  _openModal('modal-journal');
+}
+
+function renderJournalModal(){
+  if(!_jmTier||!_jmSectionId)return;
+  const arr=_jmTier==='main'?S.mainBranches:_jmTier==='sub'?S.subBranches:S.leafBranches;
+  const item=arr.find(b=>b.id===_jmSectionId);
+  const col=item?.color||'#6b7a96';
+  // 取出直接屬於此版塊的節點（branchId對應）
+  const nodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===_jmSectionId);
+  const body=document.getElementById('jm-body');
+  if(!nodes.length){
+    body.innerHTML='<div style="padding:12px 4px;font-size:11px;color:var(--text3);">尚無日誌。</div>';
+    return;
+  }
+  let html='';
+  nodes.forEach(nd=>{
+    const hf=hasFail(nd),hi=!hf&&hasAncestorFail(nd.id);
+    // 預覽：優先 content，其次 topic，其次 reason
+    const preview=(nd.objective||nd.action||nd.result||'').replace(/\n/g,' ');
+    const previewText=preview.length>72?preview.slice(0,72)+'…':preview;
+    html+=`<div onclick="jmOpenNode('${nd.id}')" style="
+      display:flex;align-items:flex-start;gap:9px;padding:9px 11px;
+      background:var(--bg3);border:1px solid var(--border);border-radius:7px;
+      cursor:pointer;transition:border-color .15s;"
+      onmouseover="this.style.borderColor='${col}'"
+      onmouseout="this.style.borderColor='var(--border)'">
+      <div style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0;margin-top:4px;"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:${previewText?'3px':'0'};">${escHtml(nd.title)}</div>
+        ${previewText?`<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(previewText)}</div>`:''}
+      </div>
+      ${hf?`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(255,77,106,.15);color:var(--red);border:1px solid rgba(255,77,106,.3);flex-shrink:0;">✕</span>`:''}
+      ${hi?`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(255,159,67,.12);color:var(--orange);border:1px solid rgba(255,159,67,.25);flex-shrink:0;">!</span>`:''}
+    </div>`;
+  });
+  body.innerHTML=html;
+}
+
+function jmOpenNode(id){
+  closeModal('modal-journal');
+  selectedId=id;
+  openPanel(id);
+  if(viewMode==='folder')document.getElementById('folder-backdrop').classList.add('active');
+}
+
+function jmAddLog(){
+  const inp=document.getElementById('jm-new-title');
+  const title=inp.value.trim();
+  if(!title){toast('請輸入日誌標題');return;}
+  // 同版塊最後一個節點當parent，否則掛root
+  const siblings=S.nodes.filter(n=>!n.isRoot&&n.branchId===_jmSectionId);
+  const pid=siblings.length?siblings[siblings.length-1].id:'root';
+  inp.value='';
+  closeModal('modal-journal');
+  addNodeTo(title,pid,_jmSectionId);
+}
+
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function openManageSectors(){openManageNew();}
+
+// ═══════════════════════════════════
+// ADD NODE MODAL
+// ═══════════════════════════════════
+function openAddNode(){
+  document.getElementById('new-node-title').value='';
+  document.getElementById('new-node-branch').innerHTML=S.branches.map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
+  _openModal('modal-node');
+  setTimeout(()=>document.getElementById('new-node-title').focus(),100);
+}
+function confirmAddNode(){
+  const t=document.getElementById('new-node-title').value.trim();if(!t)return;
+  const bid=document.getElementById('new-node-branch').value;
+  const bNodes=S.nodes.filter(n=>n.branchId===bid&&!n.isRoot);
+  const pid=bNodes.length?bNodes[bNodes.length-1].id:'root';
+  closeModal('modal-node');addNodeTo(t,pid,bid);
+}
+
+// ═══════════════════════════════════
+// FOLDER VIEW
+// ═══════════════════════════════════
+function renderFolderView(){
+  const fv=document.getElementById('folder-view');
+  renderFolderViewNew();
+}
+function folderOpenNode(id){
+  selectedId=id;
+  openPanel(id);
+  document.getElementById('folder-backdrop').classList.add('active');
+}
+function showCtx(x,y){const m=document.getElementById('ctx-menu');m.style.display='block';m.style.left=x+'px';m.style.top=y+'px';}
+function hideCtx(){document.getElementById('ctx-menu').style.display='none';}
+function ctxAddChild(){
+  hideCtx();
+  const nd=node(ctxId);
+  showPrompt('新節點標題','這次更新的主軸',t=>addNodeTo(t,ctxId));
+}
+function ctxMove(){toast('移動功能僅在資料夾視圖使用');}
+function ctxEdit(){hideCtx();selectedId=ctxId;openPanel(ctxId);}
+function ctxDelete(){hideCtx();const nd=node(ctxId);if(!nd||nd.isRoot)return;if(!confirm(`確認刪除「${nd.title}」？`))return;deleteNode(ctxId);}
+
+// ═══════════════════════════════════
+// BRANCHES FLASH
+// ═══════════════════════════════════
+function flashBranch(bid){
+}
+
+// ═══════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════
+function navPush(id){navHist=navHist.slice(0,navIdx+1);navHist.push(id);navIdx=navHist.length-1;updateNavBtns();}
+function updateNavBtns(){
+  const atStart=navIdx<=0,atEnd=navIdx>=navHist.length-1;
+  document.getElementById('nav-prev').disabled=atStart;
+  document.getElementById('nav-next').disabled=atEnd;
+  const tp=document.getElementById('tb-prev'),tn=document.getElementById('tb-next');
+  if(tp)tp.disabled=atStart;if(tn)tn.disabled=atEnd;
+}
+function navPrev(){if(navIdx<=0)return;navIdx--;const id=navHist[navIdx];selectedId=id;_renderPanel(id);focusNode(id);updateNavBtns();}
+function navNext(){if(navIdx>=navHist.length-1)return;navIdx++;const id=navHist[navIdx];selectedId=id;_renderPanel(id);focusNode(id);updateNavBtns();}
+function goHome(){
+  closePanel();
+  // resetView 延遲到 panel 收合後執行，避免雙重 render
+  setTimeout(()=>{vp={x:0,y:0,s:1};drawPie();},230);
+}
+function focusNode(id){drawPie();}
+
+// ═══════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════
+const SIN=document.getElementById('search-input');
+const SR=document.getElementById('search-results');
+SIN.addEventListener('input',()=>{
+  const q=SIN.value.trim().toLowerCase();if(!q){SR.style.display='none';return;}
+  const res=S.nodes.filter(n=>n.title.toLowerCase().includes(q)||(n.reason||'').toLowerCase().includes(q)||(n.tags||[]).some(t=>t.toLowerCase().includes(q)));
+  if(!res.length){SR.style.display='none';return;}
+  SR.style.display='block';
+  SR.innerHTML=res.map(n=>{const b=S.branches.find(b=>b.id===n.branchId);return`<div class="sr-item" onclick="jumpTo('${n.id}')"><div class="sr-title">${n.title}</div><div class="sr-sub">${b?'['+b.name+'] ':''} ${n.reason||''}</div></div>`;}).join('');
+});
+SIN.addEventListener('blur',()=>setTimeout(()=>SR.style.display='none',200));
+function jumpTo(id){
+  if(viewMode==='folder'){folderOpenNode(id);}
+  else{selectedId=id;openPanel(id);drawPie();}
+  SR.style.display='none';SIN.value='';
+}
+
+// ═══════════════════════════════════
+// PROJECT NAME
+// ═══════════════════════════════════
+document.getElementById('project-name').addEventListener('change',e=>{
+  S.projectName=e.target.value;const r=node('root');
+  if(r){r.title=e.target.value;}
+  save();
+});
+
+// ═══════════════════════════════════
+// THEME MODAL
+// ═══════════════════════════════════
+function openThemeModal(){
+  const r=node('root');if(!r)return;
+  document.getElementById('theme-project-name').value=S.projectName||'';
+  document.getElementById('theme-engine').value=r.themeEngine||'';
+  document.getElementById('theme-gameplay').value=r.themeGameplay||'';
+  document.getElementById('theme-platform').value=r.themePlatform||'';
+  document.getElementById('theme-constraints').value=r.themeConstraints||'';
+  document.getElementById('theme-notes').value=r.themeNotes||'';
+  _openModal('modal-theme');
+}
+function onThemeChange(){
+  // live update topbar name
+  const name=document.getElementById('theme-project-name').value;
+  if(name.trim()){
+    document.getElementById('theme-btn').textContent=name;
+    document.getElementById('project-name').value=name;
+  }
+}
+function saveTheme(){
+  const r=node('root');if(!r)return;
+  const name=document.getElementById('theme-project-name').value.trim()||'DevLog';
+  S.projectName=name;
+  r.title=name;
+  r.themeEngine=document.getElementById('theme-engine').value;
+  r.themeGameplay=document.getElementById('theme-gameplay').value;
+  r.themePlatform=document.getElementById('theme-platform').value;
+  r.themeConstraints=document.getElementById('theme-constraints').value;
+  r.themeNotes=document.getElementById('theme-notes').value;
+  document.getElementById('theme-btn').textContent=name;
+  document.getElementById('project-name').value=name;
+  save();
+  closeModal('modal-theme');
+  toast('主題已儲存');
+}
+
+// init theme-btn label from saved state
+function initThemeBtn(){
+  const name=S.projectName||'DevLog';
+  document.getElementById('theme-btn').textContent=name;
+}
+
+// ═══════════════════════════════════
+// LIGHTBOX / TOAST
+// ═══════════════════════════════════
+function openLb(src){document.getElementById('lb-img').src=src;document.getElementById('lightbox').classList.add('open');}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+
+// ═══════════════════════════════════
+// SECONDARY LOG OPS
+// ═══════════════════════════════════
+function addSecondaryLog(){
+  if(!selectedId)return;
+  const nd=node(selectedId);
+  if(!nd||!nd.isPrimaryLog){toast('只有主日誌可新增副日誌');return;}
+  showPrompt('副日誌標題','標題',t=>{
+    const fid=getBranchHiddenFolderId(nd.branchId);
+    const parentId=fid||nd.id;
+    const nid='sl_'+Date.now();
+    S.nodes.push({
+      id:nid,title:t,isRoot:false,isSecondaryLog:true,branchId:nd.branchId,
+      parentId,objective:'',action:'',result:'',failure:'',next:'',tags:[],fails:[],images:[],files:[],children:[],
+    });
+    const parent=node(parentId);if(parent&&!parent.children.includes(nid))parent.children.push(nid);
+    fullRender();save();
+    selectedId=nid;openPanel(nid);
+    if(viewMode==='folder')renderFolderView();
+    toast('副日誌已建立');
+  });
+}
+
+function promoteToPrimary(){
+  if(!selectedId)return;
+  const nd=node(selectedId);
+  if(!nd||!nd.isSecondaryLog){toast('只有副日誌可以轉正');return;}
+  if(!confirm(`將「${nd.title}」升為主日誌？\n原主日誌將降為副日誌並移入隱藏資料夾。`))return;
+  const branchId=nd.branchId;
+  const oldPrimaryId=getBranchPrimaryLogId(branchId);
+  const hiddenFolderId=getBranchHiddenFolderId(branchId);
+  if(!oldPrimaryId){toast('找不到原主日誌');return;}
+  const oldPrimary=node(oldPrimaryId);
+  if(!oldPrimary)return;
+
+  // 1. 原主日誌 → 副日誌，連同其子節點一起移入隱藏資料夾
+  oldPrimary.isPrimaryLog=false;
+  oldPrimary.isSecondaryLog=true;
+  // 移出原 parent（root 或上層主日誌）
+  const oldParent=node(oldPrimary.parentId);
+  if(oldParent)oldParent.children=oldParent.children.filter(x=>x!==oldPrimaryId);
+  // 掛到隱藏資料夾
+  if(hiddenFolderId){
+    const hf=node(hiddenFolderId);
+    if(hf&&!hf.children.includes(oldPrimaryId))hf.children.push(oldPrimaryId);
+    oldPrimary.parentId=hiddenFolderId;
+  }
+
+  // 2. 新主日誌 → isPrimaryLog，移出隱藏資料夾，接管原主日誌的 parentId
+  nd.isSecondaryLog=false;
+  nd.isPrimaryLog=true;
+  // 移出隱藏資料夾
+  const curParent=node(nd.parentId);
+  if(curParent)curParent.children=curParent.children.filter(x=>x!==nd.id);
+  // 接管原主日誌的位置
+  const newParentId=oldParent?oldParent.id:'root';
+  nd.parentId=newParentId;
+  const np=node(newParentId);
+  if(np&&!np.children.includes(nd.id))np.children.push(nd.id);
+
+  // 3. 更新 branch 的 primaryLogId
+  const allBr=[...(S.mainBranches||[]),...(S.subBranches||[])];
+  const brItem=allBr.find(b=>b.id===branchId);
+  if(brItem)brItem.primaryLogId=nd.id;
+
+  fullRender();save();
+  selectedId=nd.id;openPanel(nd.id);
+  if(viewMode==='folder')renderFolderView();
+  toast('已轉正為主日誌');
+}
+
+// ═══════════════════════════════════
+// 文檔複製（inline panel，合併版）
+// ═══════════════════════════════════
+const DC_FIELDS=[
+  {id:'objective', label:'目標'},
+  {id:'action',    label:'行動'},
+  {id:'result',    label:'結果'},
+  {id:'failure',   label:'失敗原因'},
+  {id:'next',      label:'下一步'},
+];
+const DC_TPL_KEY='devlog_dctpl_v1';
+const DC_TPL_DEF_KEY='devlog_dctpl_def_v1';
+
+let _dcInsertOpen=false;
+let _dcTplPanelOpen=false;
+let _dcInsertedNodeIds=new Set();
+
+function _getDcTpls(){try{return JSON.parse(localStorage.getItem(DC_TPL_KEY)||'[]');}catch{return[];}}
+function _saveDcTpls(a){localStorage.setItem(DC_TPL_KEY,JSON.stringify(a));}
+function _getDcTplDef(){return parseInt(localStorage.getItem(DC_TPL_DEF_KEY)||'-1');}
+function _setDcTplDef(i){localStorage.setItem(DC_TPL_DEF_KEY,String(i));}
+
+// 開合主體
+function toggleDocopy(){
+  const body=document.getElementById('docopy-body');
+  const header=document.getElementById('docopy-header');
+  const chev=document.getElementById('docopy-chevron');
+  const isOpen=body.classList.contains('open');
+  body.classList.toggle('open',!isOpen);
+  header.classList.toggle('open',!isOpen);
+  chev.style.transform=isOpen?'':'rotate(90deg)';
+  if(!isOpen){dcUpdateChar();dcRefreshInsertPanel();}
+}
+
+// 插入面板開合
+function dcToggleInsertPanel(){
+  _dcInsertOpen=!_dcInsertOpen;
+  const p=document.getElementById('docopy-insert-panel');
+  p.style.display=_dcInsertOpen?'flex':'none';
+  if(_dcInsertOpen)dcRefreshInsertPanel();
+}
+
+function dcRefreshInsertPanel(){
+  if(!_dcInsertOpen)return;
+  // ── 節點標籤（歷史）──
+  const nodeTags=document.getElementById('dc-node-tags');
+  if(nodeTags){
+    nodeTags.innerHTML=_copyNodeHistory.map(n=>{
+      const done=_dcInsertedNodeIds.has(n.id);
+      return`<button class="dc-tag${done?' dimmed':''}" style="border-color:${n.color};${done?'':'color:'+n.color};" onclick="dcInsertNodeBlock('${n.id}')">${done?'✓ ':''}${escHtml(n.title)}</button>`;
+    }).join('')||'<span style="font-size:10px;color:var(--text3);">（尚無節點瀏覽記錄）</span>';
+  }
+  // ── 欄位標籤（直接填充內容）──
+  const fieldTags=document.getElementById('dc-field-tags');
+  if(fieldTags){
+    fieldTags.innerHTML=DC_FIELDS.map(f=>
+      `<button class="dc-tag" onclick="dcInsertFieldContent('${f.id}','${f.label}')">${f.label}</button>`
+    ).join('');
+  }
+  // ── 佔位標籤（匯出時替換）──
+  const phTags=document.getElementById('dc-placeholder-tags');
+  if(phTags){
+    phTags.innerHTML=DC_FIELDS.map(f=>
+      `<button class="dc-tag" style="border-style:dashed;" onclick="dcInsertPlaceholder('${f.label}')">[${f.label}]</button>`
+    ).join('');
+  }
+}
+
+// 插入節點全文
+function dcInsertNodeBlock(nid){
+  const nd=node(nid);if(!nd)return;
+  const parts=[];
+  if(nd.title)parts.push(`【標題】\n${nd.title}`);
+  if(nd.objective)parts.push(`【目標】\n${nd.objective}`);
+  if(nd.action)parts.push(`【行動】\n${nd.action}`);
+  if(nd.result)parts.push(`【結果】\n${nd.result}`);
+  if(nd.failure)parts.push(`【失敗原因】\n${nd.failure}`);
+  if(nd.next)parts.push(`【下一步】\n${nd.next}`);
+  if(nd.tags&&nd.tags.length)parts.push(`【標籤】\n${nd.tags.join('、')}`);
+  if(nd.fails&&nd.fails.length)parts.push(`【地雷記錄】\n${nd.fails.map((f,i)=>`${i+1}. ${f}`).join('\n')}`);
+  if(!parts.length){toast(`「${nd.title}」尚無內容`);return;}
+  const block=`\n── ${nd.title} ──\n${parts.join('\n\n')}\n`;
+  dcSpliceText(block);
+  _dcInsertedNodeIds.add(nid);dcRefreshInsertPanel();dcUpdateChar();
+}
+
+// 插入欄位實際內容
+function dcInsertFieldContent(fieldId,label){
+  if(!selectedId)return;
+  const nd=node(selectedId);if(!nd)return;
+  let val='';
+  if(fieldId==='title')val=nd.title||'';
+  else if(fieldId==='objective')val=nd.objective||'';
+  else if(fieldId==='action')val=nd.action||'';
+  else if(fieldId==='result')val=nd.result||'';
+  else if(fieldId==='failure')val=nd.failure||'';
+  else if(fieldId==='next')val=nd.next||'';
+  else if(fieldId==='tags')val=(nd.tags||[]).join('、')||'';
+  else if(fieldId==='fails')val=(nd.fails||[]).map((f,i)=>`${i+1}. ${f}`).join('\n')||'';
+  if(!val){toast(`「${label}」尚無內容`);return;}
+  dcSpliceText(`\n【${label}】\n${val}\n`);
+  dcUpdateChar();
+}
+
+// 插入佔位標籤
+function dcInsertPlaceholder(label){
+  dcSpliceText(`[${label}]`);
+  dcUpdateChar();
+}
+
+// 在游標位置插入文字的共用函式
+function dcSpliceText(text){
+  const ta=document.getElementById('docopy-compose');
+  const s=ta.selectionStart,e=ta.selectionEnd;
+  ta.value=ta.value.slice(0,s)+text+ta.value.slice(e);
+  ta.selectionStart=ta.selectionEnd=s+text.length;
+  ta.focus();
+}
+
+function dcUpdateChar(){
+  const ta=document.getElementById('docopy-compose');
+  if(ta)document.getElementById('docopy-char').textContent=(ta.value||'').length+' 字';
+}
+
+function dcClear(){
+  document.getElementById('docopy-compose').value='';
+  _dcInsertedNodeIds=new Set();
+  dcUpdateChar();
+  dcRefreshInsertPanel();
+}
+
+// 模板面板
+function toggleDocopyTpl(){
+  _dcTplPanelOpen=!_dcTplPanelOpen;
+  const panel=document.getElementById('docopy-tpl-panel');
+  panel.style.display=_dcTplPanelOpen?'block':'none';
+  if(_dcTplPanelOpen)dcRenderTplGrid();
+}
+
+function dcRenderTplGrid(){
+  const tpls=_getDcTpls();
+  const def=_getDcTplDef();
+  document.getElementById('docopy-tpl-grid').innerHTML=Array.from({length:10},(_,i)=>{
+    const t=tpls[i];const isDef=i===def;
+    const preview=t?(t.layout||'').slice(0,14):'';
+    return`<div class="dc-tpl-slot${t?' has-data':''}${isDef?' is-default':''}" onclick="dcApplyTpl(${i})">
+      <div class="dc-tpl-num">${isDef?'★ ':''}模板${i+1}</div>
+      ${t?`<div class="dc-tpl-prev">${escHtml(preview)}…</div>`:'<div style="font-size:13px;color:var(--text3);">＋</div>'}
+    </div>`;
+  }).join('');
+}
+
+function dcSaveTpl(){
+  const layout=document.getElementById('docopy-compose').value;
+  if(!layout.trim()){toast('請先輸入內容');return;}
+  dcRenderTplGrid();
+  toast('點選要覆蓋的模板格位');
+  document.querySelectorAll('.dc-tpl-slot').forEach((el,i)=>{
+    el.onclick=()=>_dcConfirmSaveTpl(i,layout);
+  });
+}
+
+function _dcConfirmSaveTpl(i,layout){
+  const tpls=_getDcTpls();
+  while(tpls.length<=i)tpls.push(null);
+  tpls[i]={layout};
+  _saveDcTpls(tpls);_setDcTplDef(i);
+  dcRenderTplGrid();
+  document.querySelectorAll('.dc-tpl-slot').forEach((el,j)=>{el.onclick=()=>dcApplyTpl(j);});
+  toast(`已儲存為模板 ${i+1}`);
+}
+
+function dcApplyTpl(i){
+  const tpls=_getDcTpls();
+  if(!tpls[i]){toast('此格尚無模板');return;}
+  document.getElementById('docopy-compose').value=tpls[i].layout||'';
+  _setDcTplDef(i);
+  dcUpdateChar();
+  toggleDocopyTpl();
+  toast(`已套用模板 ${i+1}`);
+}
+
+// 匯出：[佔位標籤] → 實際內容，複製剪貼簿
+function dcExport(){
+  if(!selectedId){toast('請先開啟一個節點');return;}
+  const nd=node(selectedId);if(!nd)return;
+  const ta=document.getElementById('docopy-compose');
+  let text=ta.value;
+  if(!text.trim()){toast('文字區塊為空');return;}
+  const fieldMap={
+    '目標':nd.objective||'',
+    '行動':nd.action||'',
+    '結果':nd.result||'',
+    '失敗原因':nd.failure||'',
+    '下一步':nd.next||'',
+  };
+  text=text.replace(/\[([^\]]+)\]/g,(match,key)=>key in fieldMap?fieldMap[key]:match);
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById('docopy-export-btn');
+    btn.textContent='✓ 已複製！';
+    setTimeout(()=>btn.textContent='匯出並複製',1800);
+  });
+}
+
+// 開啟面板時同步刷新節點標籤
+function dcOnPanelOpen(){
+  if(!selectedId)return;
+  const nd=node(selectedId);
+  if(nd&&!_copyNodeHistory.find(n=>n.id===selectedId)){
+    _copyNodeHistory.push({id:selectedId,title:nd.title,color:nodeColor(nd)});
+  }
+  if(_dcInsertOpen)dcRefreshInsertPanel();
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const ta=document.getElementById('docopy-compose');
+  if(ta)ta.addEventListener('input',dcUpdateChar);
+});
+// ═══════════════════════════════════
+// PERSIST + INIT
+// ═══════════════════════════════════
+
+load();
+// 遷移：舊節點補上 status='pending'
+(function migrateStatus(){
+  let changed=false;
+  S.nodes.forEach(n=>{
+    if(n.isRoot||n.isPrimaryLog||n.isHiddenFolder||n.isSecondaryLog)return;
+    if(n.status===undefined||n.status===null){
+      n.status='pending';
+      changed=true;
+    }
+  });
+  if(changed)save();
+})();
+initThemeBtn();
+window.addEventListener('resize',resize);
+resize();
+fullRender();
+</script>
+</body>
+</html>

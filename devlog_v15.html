@@ -1,0 +1,2261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevLog v14</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+:root{
+  --bg:#0a0c10;--bg2:#10141c;--bg3:#161b26;
+  --border:#1e2535;--border2:#2a3347;
+  --text:#c8d4e8;--text2:#6b7a96;--text3:#3d4a63;
+  --accent:#4a9eff;--red:#ff4d6a;--green:#3ddc84;--gold:#f5c542;--orange:#ff9f43;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+body.modal-open{overflow:hidden;}
+
+/* modal scroll fix */
+.modal-overlay.open .modal{-webkit-overflow-scrolling:touch;}
+
+/* ── TOPBAR ── */
+#topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;z-index:100;flex-wrap:wrap;}
+#topbar h1{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);letter-spacing:2px;white-space:nowrap;}
+.tsep{width:1px;height:18px;background:var(--border2);flex-shrink:0;}
+#project-name{font-size:13px;color:var(--text);background:none;border:none;outline:none;cursor:pointer;padding:3px 7px;border-radius:4px;}
+#project-name:hover{background:var(--bg3);}
+.spacer{flex:1;}
+#search-wrap{position:relative;display:flex;align-items:center;}
+#search-wrap svg{position:absolute;left:8px;opacity:.4;pointer-events:none;}
+#search-input{background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:5px 9px 5px 28px;width:160px;outline:none;transition:border-color .2s,width .3s;}
+#search-input:focus{border-color:var(--accent);width:220px;}
+#search-input::placeholder{color:var(--text3);}
+.btn{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:'Noto Sans TC',sans-serif;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:600;}
+.btn.primary:hover{background:#6cb5ff;}
+.btn.danger{border-color:var(--red);color:var(--red);}
+.btn.danger:hover{background:rgba(255,77,106,.1);}
+.btn:disabled{opacity:.35;cursor:default;pointer-events:none;}
+
+/* view mode toggle */
+#view-toggle{display:flex;border:1px solid var(--border2);border-radius:6px;overflow:hidden;}
+.vt-btn{padding:5px 9px;background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;border:none;font-family:'Noto Sans TC',sans-serif;transition:all .15s;}
+.vt-btn.active{background:var(--accent);color:#000;font-weight:600;}
+
+/* ── MAIN ── */
+#main{display:flex;flex:1;overflow:hidden;min-height:0;}
+
+/* ── CANVAS (pie mode) ── */
+#canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;}
+#canvas-wrap.grabbing{cursor:grabbing;}
+#graph-canvas{position:absolute;top:0;left:0;pointer-events:none;}
+#nodes-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+
+/* ── FOLDER MODE ── */
+#folder-view{flex:1;min-width:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:18px;display:none;}
+#folder-view.active{display:block;}
+
+
+.fn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.fn-title{flex:1;font-weight:500;}
+.fn-badges{display:flex;gap:4px;}
+.fn-badge{font-size:9px;padding:2px 5px;border-radius:8px;font-weight:700;}
+.fn-badge.fail{background:rgba(255,77,106,.15);color:var(--red);border:1px solid rgba(255,77,106,.3);}
+.fn-badge.inherited{background:rgba(255,159,67,.12);color:var(--orange);border:1px solid rgba(255,159,67,.25);}
+.fn-children{margin-left:20px;border-left:1px solid var(--border);padding-left:8px;}
+
+/* ── NODE DOM ELEMENTS ── */
+.node{position:absolute;pointer-events:all;cursor:pointer;user-select:none;will-change:transform;}
+.node-ring{border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid;position:relative;transition:box-shadow .2s,transform .3s;}
+.node:hover .node-ring{filter:brightness(1.3);}
+.node.selected .node-ring{box-shadow:0 0 0 3px rgba(255,255,255,.25),0 0 18px rgba(255,255,255,.12)!important;}
+.node-lbl{position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);font-size:10px;white-space:nowrap;pointer-events:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;text-align:center;}
+.node.is-root .node-lbl{font-size:13px;font-weight:700;color:var(--text);top:calc(100% + 10px);}
+.fail-badge{position:absolute;top:-3px;right:-3px;width:15px;height:15px;background:var(--red);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;border:2px solid var(--bg);}
+.err-inherited-badge{position:absolute;bottom:-3px;right:-3px;width:14px;height:14px;background:var(--orange);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#000;border:2px solid var(--bg);}
+.node.moving .node-ring{outline:2px dashed var(--gold);outline-offset:3px;}
+/* Sector arcs are now drawn directly onto graph-canvas (before edges) */
+
+/* ── CANVAS CONTROLS ── */
+#canvas-controls{position:absolute;bottom:14px;right:14px;display:flex;flex-direction:column;gap:5px;z-index:50;}
+.cc-btn{width:30px;height:30px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text2);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.cc-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+/* ── LEGEND ── */
+#branch-legend{position:absolute;top:10px;left:10px;display:flex;flex-direction:column;gap:4px;z-index:50;}
+.legend-item{display:flex;align-items:center;gap:6px;padding:3px 9px;background:rgba(16,20,28,.88);border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:11px;transition:border-color .15s;}
+.legend-item:hover{border-color:var(--border2);}
+.legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+
+/* ── SEARCH RESULTS ── */
+#search-results{position:absolute;top:44px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:6px;z-index:200;min-width:300px;max-height:280px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;display:none;box-shadow:0 8px 28px rgba(0,0,0,.5);}
+.sr-item{padding:7px 11px;border-radius:5px;cursor:pointer;font-size:12px;transition:background .1s;}
+.sr-item:hover{background:var(--bg3);}
+.sr-title{font-weight:600;color:var(--text);}
+.sr-sub{color:var(--text2);font-size:11px;margin-top:1px;}
+
+/* ── RIGHT PANEL ── */
+#panel{width:0;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .22s ease;flex-shrink:0;min-width:0;}
+#panel.open{width:370px;}
+#panel.folder-overlay{position:fixed;right:0;top:0;bottom:0;height:100%;z-index:300;box-shadow:-4px 0 20px rgba(0,0,0,.4);}
+#folder-backdrop{display:none;position:fixed;inset:0;z-index:299;background:rgba(0,0,0,.35);}
+#folder-backdrop.active{display:block;}
+#panel-inner{width:370px;display:flex;flex-direction:column;height:100%;overflow:hidden;}
+#panel-header{padding:14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:9px;flex-shrink:0;}
+#panel-color-dot{width:11px;height:11px;border-radius:50%;margin-top:3px;flex-shrink:0;}
+#panel-title-wrap{flex:1;min-width:0;}
+#panel-title{font-size:14px;font-weight:700;color:var(--text);background:none;border:none;outline:none;width:100%;font-family:'Noto Sans TC',sans-serif;padding:2px 0;}
+#panel-meta{font-size:10px;color:var(--text3);margin-top:2px;font-family:'JetBrains Mono',monospace;}
+#panel-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:17px;line-height:1;transition:color .15s;flex-shrink:0;}
+#panel-close:hover{color:var(--text);}
+#panel-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;}
+.fl{font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--text3);margin-bottom:5px;}
+.fi,.fta{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:7px 9px;outline:none;font-family:'Noto Sans TC',sans-serif;transition:border-color .15s;resize:none;}
+.fi:focus,.fta:focus{border-color:var(--accent);}
+.fta{min-height:72px;line-height:1.6;}
+.fta.mono{font-family:'JetBrains Mono',monospace;font-size:11px;background:#0d1017;}
+#tags-wrap{display:flex;flex-wrap:wrap;gap:4px;}
+.tag{display:flex;align-items:center;gap:3px;padding:2px 7px;border-radius:12px;font-size:11px;border:1px solid var(--border2);color:var(--text2);}
+.tag-del{cursor:pointer;opacity:.5;font-size:11px;}
+.tag-del:hover{opacity:1;}
+#tag-input{background:none;border:1px dashed var(--border2);border-radius:12px;color:var(--text2);font-size:11px;padding:2px 7px;outline:none;width:70px;font-family:'Noto Sans TC',sans-serif;}
+#images-wrap{display:flex;flex-wrap:wrap;gap:6px;}
+.img-thumb{width:64px;height:64px;border-radius:5px;object-fit:cover;border:1px solid var(--border2);cursor:pointer;transition:border-color .15s;}
+.img-thumb:hover{border-color:var(--accent);}
+.img-add{width:64px;height:64px;border:1px dashed var(--border2);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:20px;cursor:pointer;transition:all .15s;}
+.img-add:hover{border-color:var(--accent);color:var(--accent);}
+#files-wrap{display:flex;flex-direction:column;gap:5px;}
+.file-item{display:flex;align-items:center;gap:7px;padding:6px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:11px;}
+.file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);}
+.file-sz{color:var(--text3);flex-shrink:0;}
+.file-del{cursor:pointer;color:var(--text3);flex-shrink:0;}
+.file-del:hover{color:var(--red);}
+.file-add{display:flex;align-items:center;gap:5px;padding:6px 9px;border:1px dashed var(--border2);border-radius:5px;color:var(--text3);font-size:11px;cursor:pointer;transition:all .15s;}
+.file-add:hover{border-color:var(--accent);color:var(--accent);}
+#fail-list{display:flex;flex-direction:column;gap:5px;margin-bottom:6px;}
+.fail-item{display:flex;align-items:flex-start;gap:7px;padding:6px 9px;background:rgba(255,77,106,.05);border:1px solid rgba(255,77,106,.18);border-radius:5px;font-size:11px;color:var(--text2);}
+.fail-x{color:var(--red);flex-shrink:0;}
+.fail-del{cursor:pointer;color:var(--text3);flex-shrink:0;margin-left:auto;}
+.fail-del:hover{color:var(--red);}
+.fail-item.inherited{background:rgba(255,159,67,.06);border-color:rgba(255,159,67,.25);}
+.fail-item.inherited .fail-x{color:var(--orange);}
+.fail-from{font-size:9px;color:var(--orange);margin-top:2px;font-style:italic;}
+.fail-row{display:flex;gap:5px;}
+.fail-row input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none;font-family:'Noto Sans TC',sans-serif;}
+.fail-row input:focus{border-color:var(--red);}
+.add-child-btn{width:100%;padding:7px;border:1px dashed var(--border2);border-radius:6px;background:none;color:var(--text3);font-size:11px;cursor:pointer;text-align:center;transition:all .15s;font-family:'Noto Sans TC',sans-serif;}
+.add-child-btn:hover{border-color:var(--accent);color:var(--accent);}
+#panel-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:6px;flex-shrink:0;}
+#panel-nav{display:flex;align-items:center;gap:5px;padding:7px 14px;border-top:1px solid var(--border);flex-shrink:0;}
+.nav-btn{display:flex;align-items:center;gap:3px;padding:4px 9px;border-radius:5px;border:1px solid var(--border2);background:none;color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s;font-family:'Noto Sans TC',sans-serif;}
+.nav-btn:hover{color:var(--text);border-color:var(--border);}
+.nav-btn.home{color:var(--accent);border-color:rgba(74,158,255,.3);}
+.nav-btn.home:hover{background:rgba(74,158,255,.08);}
+
+/* ── MODALS ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;align-items:center;justify-content:center;touch-action:pan-y;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:20px;width:520px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;gap:12px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;}
+.modal h3{font-size:15px;font-weight:700;}
+.modal-btns{display:flex;gap:7px;justify-content:flex-end;margin-top:4px;}
+
+/* color picker */
+.color-swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s;}
+.color-swatch:hover,.color-swatch.sel{border-color:#fff;transform:scale(1.15);}
+
+/* copy doc */
+#copy-node-label{font-size:11px;color:var(--text2);padding:4px 9px;background:var(--bg3);border-radius:6px;border:1px solid var(--border);}
+#copy-example-hint{font-size:11px;color:var(--text3);font-style:italic;padding:8px 11px;background:var(--bg3);border-radius:6px;border:1px dashed var(--border2);line-height:1.7;}
+.ins-tag{padding:4px 10px;border-radius:12px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s;}
+.ins-tag:hover{border-color:var(--accent);color:var(--accent);}
+.ins-tag.dimmed{opacity:.35;filter:grayscale(.5);}
+#copy-compose{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;line-height:1.7;padding:10px 12px;outline:none;resize:vertical;min-height:180px;font-family:'Noto Sans TC',sans-serif;transition:border-color .15s;}
+#copy-compose:focus{border-color:var(--accent);}
+#copy-char-count{font-size:10px;color:var(--text3);text-align:right;}
+
+/* template */
+.tpl-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+.tpl-slot{padding:8px 5px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;text-align:center;cursor:pointer;font-size:11px;color:var(--text2);transition:all .15s;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
+.tpl-slot:hover{border-color:var(--accent);}
+.tpl-slot.has-data{color:var(--text);}
+.tpl-slot .tpl-num{font-size:10px;color:var(--text3);}
+.tpl-slot .tpl-preview{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;}
+.tpl-slot.is-default{border-color:var(--green)!important;box-shadow:0 0 0 1px rgba(61,220,132,.2);}
+
+/* ── CONTEXT MENU ── */
+#ctx-menu{display:none;position:fixed;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:5px;z-index:500;min-width:155px;box-shadow:0 8px 22px rgba(0,0,0,.5);}
+.ctx-item{padding:7px 11px;border-radius:5px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:background .1s;}
+.ctx-item:hover{background:var(--bg3);}
+.ctx-item.danger{color:var(--red);}
+.ctx-sep{height:1px;background:var(--border);margin:3px 0;}
+
+/* lightbox */
+#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;align-items:center;justify-content:center;cursor:zoom-out;}
+#lightbox.open{display:flex;}
+#lightbox img{max-width:90vw;max-height:90vh;border-radius:7px;}
+#toast{position:fixed;bottom:54px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:7px;padding:8px 16px;font-size:12px;color:var(--text);z-index:900;pointer-events:none;opacity:0;transition:opacity .3s;}
+
+
+/* ── THREE-TIER FOLDER ── */
+.main-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+.main-header{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;user-select:none;background:var(--bg3);}
+.main-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.main-name{font-weight:700;font-size:14px;flex:1;}
+.main-desc{font-size:10px;color:var(--text3);flex:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.main-info-btn{font-size:11px;color:var(--text3);padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.main-info-btn:hover{color:var(--accent);border-color:var(--accent);}
+.main-chevron{font-size:11px;color:var(--text3);transition:transform .2s;flex-shrink:0;}
+.main-chevron.open{transform:rotate(90deg);}
+.main-body{display:none;}
+.sub-section{border-top:1px solid var(--border);background:var(--bg2);}
+.sub-header{display:flex;align-items:center;gap:9px;padding:11px 16px 11px 28px;cursor:pointer;user-select:none;}
+.sub-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.sub-name{font-weight:600;font-size:12px;flex:1;color:var(--text);}
+.sub-info-btn{font-size:10px;color:var(--text3);padding:2px 6px;border-radius:4px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.sub-info-btn:hover{color:var(--accent);border-color:var(--accent);}
+.sub-chevron{font-size:10px;color:var(--text3);transition:transform .2s;flex-shrink:0;}
+.sub-chevron.open{transform:rotate(90deg);}
+.sub-body{display:none;}
+.leaf-section{border-top:1px solid var(--border);background:var(--bg2);}
+.leaf-header{display:flex;align-items:center;gap:8px;padding:9px 16px 9px 44px;cursor:pointer;user-select:none;}
+.leaf-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.leaf-name{font-weight:500;font-size:11px;flex:1;color:var(--text2);}
+.leaf-info-btn{font-size:9px;color:var(--text3);padding:2px 5px;border-radius:3px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.leaf-info-btn:hover{color:var(--accent);border-color:var(--accent);}
+.leaf-chevron{font-size:10px;color:var(--text3);transition:transform .2s;flex-shrink:0;}
+.leaf-chevron.open{transform:rotate(90deg);}
+.leaf-body{display:none;padding:4px 8px 4px 60px;border-top:1px solid var(--border);}
+.leaf-node-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;cursor:pointer;font-size:11px;transition:background .1s;}
+.leaf-node-row:hover{background:var(--bg3);}
+
+/* ── BRANCH DETAIL MODAL ── */
+#modal-branch-detail .modal{max-width:500px;}
+.bd-tier{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+.bd-desc{font-size:13px;color:var(--text);line-height:1.7;padding:10px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);}
+
+/* ── JOURNAL / LOG SYSTEM ── */
+.log-add-row{display:flex;gap:5px;padding:4px 0 2px;}
+.log-add-row input{flex:1;background:var(--bg3);border:1px dashed var(--border2);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;outline:none;font-family:'Noto Sans TC',sans-serif;}
+.log-add-row input:focus{border-color:var(--accent);}
+.log-add-row button{padding:5px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:11px;cursor:pointer;transition:all .12s;font-family:'Noto Sans TC',sans-serif;}
+.log-add-row button:hover{border-color:var(--accent);color:var(--accent);}
+
+/* folder mode */
+.main-desc-hidden{display:none!important;}
+.tier-log-btn{font-size:10px;color:var(--text3);padding:2px 7px;border-radius:5px;border:1px solid var(--border2);background:none;cursor:pointer;transition:all .15s;flex-shrink:0;font-family:'Noto Sans TC',sans-serif;}
+.tier-log-btn:hover{color:var(--green);border-color:var(--green);}
+#modal-journal .modal{width:500px;}
+.jm-tier-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:4px;}
+
+
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>DevLog</h1>
+  <div class="tsep"></div>
+  <input id="project-name" value="DevLog" title="點擊編輯"/>
+  <div class="spacer"></div>
+  <div id="search-wrap">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input id="search-input" placeholder="搜尋…"/>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <div id="view-toggle">
+      <button class="vt-btn active" id="vt-pie" onclick="setViewMode('pie')">⬤ 圓餅</button>
+      <button class="vt-btn" id="vt-folder" onclick="setViewMode('folder')">📁 資料夾</button>
+    </div>
+  </div>
+  <div class="tsep"></div>
+  <button class="btn" id="manage-sector-btn" onclick="openManageSectors()">⊞ 版塊</button>
+  <div class="tsep"></div>
+  <button class="btn" id="tb-home" onclick="goHome()" title="回首頁">⌂ 首頁</button>
+  <button class="btn" id="tb-prev" onclick="navPrev()" title="上一頁">◀</button>
+  <button class="btn" id="tb-next" onclick="navNext()" title="下一頁">▶</button>
+  <div class="tsep"></div>
+  <button class="btn primary" onclick="openAddNode()">＋ 新日誌</button>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- PIE VIEW -->
+  <div id="canvas-wrap">
+    <canvas id="graph-canvas"></canvas>
+    <div id="nodes-layer"></div>
+    <div id="branch-legend"></div>
+    <div id="canvas-controls">
+      <button class="cc-btn" onclick="zoom(1.2)">＋</button>
+      <button class="cc-btn" onclick="zoom(0.83)">－</button>
+      <button class="cc-btn" onclick="resetView()">⊙</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+
+  <!-- FOLDER VIEW -->
+  <div id="folder-view"></div>
+
+  <!-- FOLDER PANEL BACKDROP -->
+  <div id="folder-backdrop" onclick="closePanel()"></div>
+
+  <!-- PANEL -->
+  <div id="panel">
+    <div id="panel-inner">
+      <div id="panel-header">
+        <div id="panel-color-dot"></div>
+        <div id="panel-title-wrap">
+          <input id="panel-title" placeholder="節點標題…"/>
+          <div id="panel-meta"></div>
+        </div>
+        <button id="panel-close" onclick="closePanel()">×</button>
+      </div>
+      <div id="panel-body">
+        <div>
+          <div class="fl">所屬版塊</div>
+          <select id="branch-select" class="fi" onchange="onFieldChange()"></select>
+        </div>
+        <div>
+          <div class="fl">主題內容</div>
+          <textarea id="f-topic" class="fta" placeholder="這個節點的主要主題或目標是什麼？" oninput="onFieldChange()" style="min-height:52px;"></textarea>
+        </div>
+        <div>
+          <div class="fl">更新原因</div>
+          <textarea id="f-reason" class="fta" placeholder="為什麼要做這次更新？" oninput="onFieldChange()"></textarea>
+        </div>
+        <div>
+          <div class="fl">更新內容</div>
+          <textarea id="f-content" class="fta" placeholder="這次改了什麼？" oninput="onFieldChange()"></textarea>
+        </div>
+        <div>
+          <div class="fl">實作說明</div>
+          <textarea id="f-walkthrough" class="fta" placeholder="怎麼做、預期效果、測試方法" oninput="onFieldChange()" style="min-height:80px;"></textarea>
+        </div>
+        <div>
+          <div class="fl">AI 指令記錄</div>
+          <textarea id="f-prompt" class="fta mono" placeholder="貼上給 AI 的指令" oninput="onFieldChange()" style="min-height:88px;"></textarea>
+        </div>
+        <div>
+          <div class="fl">標籤</div>
+          <div id="tags-wrap"><input id="tag-input" placeholder="＋ 新增" onkeydown="onTagKey(event)"/></div>
+        </div>
+        <div>
+          <div class="fl">附件圖片</div>
+          <div id="images-wrap">
+            <div class="img-add" onclick="document.getElementById('img-input').click()">＋</div>
+            <input id="img-input" type="file" accept="image/*" multiple style="display:none" onchange="handleImgUpload(event)"/>
+          </div>
+        </div>
+        <div>
+          <div class="fl">附件檔案</div>
+          <div id="files-wrap">
+            <div class="file-add" onclick="document.getElementById('file-input').click()">＋ 附加檔案</div>
+            <input id="file-input" type="file" multiple style="display:none" onchange="handleFileUpload(event)"/>
+          </div>
+        </div>
+        <div>
+          <div class="fl" style="display:flex;align-items:center;gap:7px;">地雷記錄<span style="font-size:10px;color:var(--text3);font-weight:normal;letter-spacing:0;text-transform:none">節點上會標示 ✕</span></div>
+          <div id="fail-list"></div>
+          <div class="fail-row">
+            <input id="fail-input" placeholder="這條路走不通——原因是…" onkeydown="if(event.key==='Enter')addFail()"/>
+            <button class="btn danger" onclick="addFail()" style="padding:5px 9px;">標記</button>
+          </div>
+        </div>
+        <button class="add-child-btn" onclick="addChildFromPanel()">＋ 在此節點下建立子日誌</button>
+      </div>
+      <div id="panel-footer">
+        <button class="btn" style="flex:1" onclick="openCopyDoc()">📋 文檔複製</button>
+        <button class="btn" onclick="startMove()">移動</button>
+        <button class="btn danger" onclick="deleteSelected()">刪除</button>
+      </div>
+      <div id="panel-nav">
+        <button class="nav-btn home" onclick="goHome()">⌂ 首頁</button>
+        <div style="flex:1"></div>
+        <button class="nav-btn" id="nav-prev" onclick="navPrev()">◀</button>
+        <button class="nav-btn" id="nav-next" onclick="navNext()">▶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+  <div class="ctx-item" onclick="ctxAddChild()">＋ 新增子日誌</div>
+  <div class="ctx-item" onclick="ctxMove()">↔ 移動節點</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxEdit()">✎ 編輯</div>
+  <div class="ctx-item danger" onclick="ctxDelete()">✕ 刪除</div>
+</div>
+
+<!-- ADD NODE MODAL -->
+<div class="modal-overlay" id="modal-node">
+  <div class="modal">
+    <h3>新增日誌節點</h3>
+    <div class="fl">標題</div>
+    <input class="fi" id="new-node-title" placeholder="這次更新的主軸" style="margin-bottom:10px;"/>
+    <div class="fl">所屬版塊（必選）</div>
+    <select class="fi" id="new-node-branch" style="margin-bottom:4px;"></select>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal('modal-node')">取消</button>
+      <button class="btn primary" onclick="confirmAddNode()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- COPY DOC MODAL -->
+<div class="modal-overlay" id="modal-copy">
+  <div class="modal" style="width:580px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <h3>📋 日誌文檔複製</h3>
+      <span id="copy-node-label">—</span>
+    </div>
+    <div id="copy-example-hint">💡 以下內容可一鍵複製成純文字，方便潤飾後給 AI。點節點標籤 → 轉暗 → 該節點所有欄位插入游標位置。</div>
+    <div>
+      <div class="fl" style="margin-bottom:6px;">插入節點（點選後轉暗，內容插入游標）</div>
+      <div id="copy-node-tags" style="display:flex;flex-wrap:wrap;gap:5px;min-height:24px;"></div>
+    </div>
+    <div>
+      <div class="fl" style="margin-bottom:6px;">插入欄位（當前節點）</div>
+      <div id="copy-tag-bar" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+    </div>
+    <div>
+      <div class="fl">文檔內容</div>
+      <textarea id="copy-compose" placeholder="在這裡設定 AI 角色，然後點上方標籤插入資料…"></textarea>
+      <div id="copy-char-count">0 字</div>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn" style="flex:1" onclick="openTplSave()">💾 模板儲存</button>
+      <button class="btn" style="flex:1" onclick="openTplSelect()">📂 模板選擇</button>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal('modal-copy')">關閉</button>
+      <button class="btn" onclick="clearCompose()">清空</button>
+      <button class="btn primary" id="copy-confirm-btn" onclick="doDocCopy()">複製到剪貼簿</button>
+    </div>
+  </div>
+</div>
+
+<!-- TEMPLATE SAVE -->
+<div class="modal-overlay" id="modal-tpl-save">
+  <div class="modal" style="width:400px;">
+    <h3>💾 模板儲存</h3>
+    <div style="font-size:11px;color:var(--red);margin-bottom:4px;">⚠ 點格位直接覆蓋，無法復原</div>
+    <div class="tpl-grid" id="tpl-save-grid"></div>
+    <div class="modal-btns"><button class="btn" onclick="closeModal('modal-tpl-save')">關閉</button></div>
+  </div>
+</div>
+
+<!-- TEMPLATE SELECT -->
+<div class="modal-overlay" id="modal-tpl-select">
+  <div class="modal" style="width:400px;">
+    <h3>📂 模板選擇</h3>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">點選設為預設，之後開啟自動套用。<span style="color:var(--green);">綠框</span>=目前預設</div>
+    <div class="tpl-grid" id="tpl-select-grid"></div>
+    <div class="modal-btns"><button class="btn" onclick="closeModal('modal-tpl-select')">關閉</button></div>
+  </div>
+</div>
+
+<!-- BRANCH DETAIL MODAL -->
+<div class="modal-overlay" id="modal-branch-detail">
+  <div class="modal" style="width:460px;gap:10px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <div id="bd-dot" style="width:14px;height:14px;border-radius:50%;flex-shrink:0;margin-top:3px;"></div>
+      <div style="flex:1;">
+        <div id="bd-tier" class="bd-tier"></div>
+        <div id="bd-name" style="font-size:16px;font-weight:700;margin-bottom:8px;"></div>
+        <div id="bd-desc" class="bd-desc"></div>
+      </div>
+    </div>
+    <div class="modal-btns"><button class="btn" onclick="closeModal('modal-branch-detail')">關閉</button></div>
+  </div>
+</div>
+
+<!-- JOURNAL MODAL -->
+<div class="modal-overlay" id="modal-journal">
+  <div class="modal" id="modal-journal-inner" style="width:500px;max-height:80vh;overflow:hidden;padding-bottom:0;">
+    <div style="display:flex;align-items:center;gap:9px;flex-shrink:0;">
+      <div id="jm-dot" style="width:11px;height:11px;border-radius:50%;flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div id="jm-name" style="font-size:14px;font-weight:700;"></div>
+        <div id="jm-tier" class="jm-tier-label"></div>
+      </div>
+      <button class="btn" onclick="closeModal('modal-journal')" style="padding:4px 9px;">×</button>
+    </div>
+    <div id="jm-body" style="flex:1;min-height:100px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;padding-right:2px;margin:8px 0;"></div>
+    <div class="log-add-row" id="jm-add-row" style="flex-shrink:0;padding-bottom:4px;">
+      <input id="jm-new-title" placeholder="新日誌標題…" onkeydown="if(event.key==='Enter')jmAddLog()"/>
+      <button onclick="jmAddLog()">＋ 新增</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE NEW BRANCHES MODAL -->
+<div class="modal-overlay" id="modal-manage-new">
+  <div class="modal" style="width:540px;">
+    <h3>⊞ 三層版塊管理</h3>
+    <div id="manage-new-body" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div class="modal-btns" style="margin-top:8px;">
+      <button class="btn" onclick="closeModal('modal-manage-new')">關閉</button>
+      <button class="btn primary" onclick="addMainBranch()">＋ 新增主版塊</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT BRANCH MODAL -->
+<div class="modal-overlay" id="modal-edit-branch">
+  <div class="modal" style="width:420px;">
+    <h3 id="eb-title">新增版塊</h3>
+    <div class="fl">名稱</div>
+    <input class="fi" id="eb-name" placeholder="版塊名稱" style="margin-bottom:8px;"/>
+    <div class="fl">說明</div>
+    <textarea class="fta" id="eb-desc" placeholder="版塊用途說明…" style="min-height:64px;margin-bottom:8px;"></textarea>
+    <div class="fl">顏色</div>
+    <div id="eb-swatches" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal('modal-edit-branch')">取消</button>
+      <button class="btn primary" id="eb-confirm" onclick="confirmEditBranch()">確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" onclick="closeLightbox()"><img id="lb-img" src=""/></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+// 色彩系統 v3
+// L1 : 10 大色域（色輪等距 36°，彼此最大對比）
+// L2 : 每域 10 個鄰近色（色相 ±18° 展開，色輪連續不重疊）
+// L3 : 每色 8 個深淺（固定色相，明度 0.14→0.70 線性梯度）
+// ═══════════════════════════════════════════════════════
+
+const L1_COLORS = [
+  {id:'red',    name:'紅',   hue:  0, hex:'#e42525'},
+  {id:'orange', name:'橙',   hue: 36, hex:'#e89417'},
+  {id:'yellow', name:'黃',   hue: 72, hex:'#bce029'},
+  {id:'lime',   name:'草綠', hue:108, hex:'#40c11f'},
+  {id:'green',  name:'綠',   hue:144, hex:'#20b65c'},
+  {id:'cyan',   name:'青',   hue:180, hex:'#1fc1c1'},
+  {id:'azure',  name:'天藍', hue:216, hex:'#1b67da'},
+  {id:'blue',   name:'藍',   hue:252, hex:'#4219e6'},
+  {id:'violet', name:'紫',   hue:288, hex:'#bc29e0'},
+  {id:'rose',   name:'玫紅', hue:324, hex:'#e31c93'},
+];
+
+// L2: 每個 L1 色域的 10 個同族鄰近色
+// 策略：色相帶從 L1 錨點往兩側各展開 ~18°，涵蓋粉紅→紅→橘紅這類色相族群
+// 相鄰色系之間色相連續，同族10色彼此差異小、整體對比同族外的顏色大
+const L2_VARIANTS = {
+  // 紅族：粉紅→紅→橘紅（hue 342°→18°）
+  red:    ['#e0297a','#e02555','#e42525','#e43a25','#e45025','#e06e2a','#cc5522','#b84422','#e8403a','#e85050'],
+  // 橙族：橘紅→橙→金橙（hue 18°→54°）
+  orange: ['#e86025','#e87825','#e89417','#e8a817','#e8c017','#d4a012','#c89010','#e8a030','#e8b040','#e8c050'],
+  // 黃族：黃綠→黃→黃橙（hue 54°→90°）
+  yellow: ['#c8e029','#bce029','#a8d820','#90cc18','#d4e829','#e0e029','#e8e040','#d8d820','#c0cc18','#b0c410'],
+  // 草綠族：黃綠→草綠→翠綠（hue 90°→126°）
+  lime:   ['#80c41f','#60c21f','#40c11f','#28c01f','#1cc130','#1cb840','#20a820','#30b820','#50c020','#70c820'],
+  // 綠族：翠綠→綠→青綠（hue 126°→162°）
+  green:  ['#20b640','#20b655','#20b65c','#20b670','#20b685','#20aa70','#18a060','#20c068','#28cc74','#30d880'],
+  // 青族：青綠→青→藍青（hue 162°→198°）
+  cyan:   ['#1fc190','#1fc1a8','#1fc1c1','#1fb0c8','#1fa0cc','#18b0b8','#10a0a8','#20c8c8','#28d4d0','#30d8dc'],
+  // 天藍族：藍青→天藍→藍（hue 198°→234°）
+  azure:  ['#1b90da','#1b78da','#1b67da','#1b55da','#1b40da','#2050d0','#1840c0','#2860e0','#1870e8','#1058d0'],
+  // 藍族：紫藍→藍→藍紫（hue 234°→270°）
+  blue:   ['#3019e6','#4019e6','#4219e6','#5019e6','#6019e6','#2810d8','#3818e0','#5828e8','#6830e8','#7838ec'],
+  // 紫族：藍紫→紫→紫紅（hue 270°→306°）
+  violet: ['#9029e0','#a029e0','#bc29e0','#cc29e0','#d829d8','#a820d0','#b828e0','#c830e8','#d030e0','#d828cc'],
+  // 玫紅族：紫紅→玫紅→粉紅（hue 306°→342°）
+  rose:   ['#e31ca8','#e31c93','#e31c78','#e31c60','#e03070','#d81888','#cc1080','#e82888','#e83898','#e848a8'],
+};
+
+// L3: 8 個深淺階（固定色相 = L1 錨點色相，明度 0.14→0.70）
+const L3_SHADES = {
+  red: ['#400808','#5f0c0c','#7f1010','#a31414','#c81919','#e42525','#e94949','#ee7777'],
+  orange: ['#412a06','#613e0a','#82530d','#a76b11','#cc8314','#e99920','#edaa45','#f1bf74'],
+  yellow: ['#343e09','#4e5e0d','#687d12','#85a117','#a3c41c','#bce029','#c7e64c','#d5ec79'],
+  lime: ['#143d0a','#1e5c0f','#297b14','#349e1a','#40c11f','#50dd2c','#6de250','#91ea7b'],
+  green: ['#0b3d1f','#105b2e','#15793d','#1c9c4f','#22bf60','#2fda73','#52e08b','#7de8a8'],
+  cyan: ['#0a3d3d','#0f5c5c','#147b7b','#1a9e9e','#1fc1c1','#2cdddd','#50e2e2','#7beaea'],
+  azure: ['#081e40','#0c2d5f','#103c7f','#144da3','#195fc8','#2572e4','#4989e9','#77a7ee'],
+  blue: ['#130740','#1c0b60','#250e81','#3012a5','#3a16ca','#4a23e7','#6847eb','#8e75f0'],
+  violet: ['#34093e','#4e0d5e','#68127d','#8517a1','#a31cc4','#bc29e0','#c74ce6','#d579ec'],
+  rose: ['#400829','#5f0c3e','#7f1053','#a3146a','#c81982','#e42598','#e949a9','#ee77be'],
+};
+
+// Legacy COLOR_DB — 保持舊存檔相容
+const COLOR_DB = L1_COLORS.map(c=>({
+  name: c.name,
+  L1: c.hex,
+  L2: (L2_VARIANTS[c.id]||[c.hex])[1] || c.hex,
+  L3: (L3_SHADES[c.id]||[c.hex])[5]   || c.hex,
+}));
+
+function getColorL(colorIdx, layer){
+  const c = L1_COLORS[colorIdx % L1_COLORS.length];
+  if(layer===1) return c.hex;
+  if(layer===2) return (L2_VARIANTS[c.id]||[c.hex])[1] || c.hex;
+  return (L3_SHADES[c.id]||[c.hex])[4] || c.hex;
+}
+function findColorIdx(hex){
+  if(!hex) return 0;
+  const h = hex.toLowerCase();
+  for(let i=0; i<L1_COLORS.length; i++){
+    const c = L1_COLORS[i];
+    if(c.hex === h) return i;
+    if((L2_VARIANTS[c.id]||[]).includes(h)) return i;
+    if((L3_SHADES[c.id]||[]).includes(h)) return i;
+  }
+  return 0;
+}
+
+const PALETTE=['#e42525','#e89417','#bce029','#40c11f','#20b65c','#1fc1c1','#1b67da','#4219e6','#bc29e0','#e31c93']; // L1 v3 10色
+const COPY_FIELDS=[
+  {id:'title',label:'標題'},{id:'reason',label:'更新原因'},{id:'content',label:'更新內容'},
+  {id:'walkthrough',label:'實作說明'},{id:'prompt',label:'AI 指令'},{id:'tags',label:'標籤'},{id:'fails',label:'地雷記錄'},
+];
+const STORE_KEY='devlog_v10';
+const TPL_KEY='devlog_v8_tpl';
+const TPL_DEF_KEY='devlog_v8_tpldef';
+
+// ═══════════════════════════════════
+// STATE
+// ═══════════════════════════════════
+let S={
+  projectName:'DevLog',
+  // 三層版塊結構：mainBranches > subBranches > leafBranches
+  // 色系分配：一=天藍azure(6), 二=綠green(4), 三=紫violet(8), 四=橙orange(1)
+  // L1=主版塊錨點, L2=次版塊鄰近色, L3=第三層深淺
+  mainBranches:[
+    {id:'m1',name:'一. 核心引擎與數據架構',colorIdx:6,colorId:'azure',color:'#1b67da',desc:'The Core — 這是項目的心臟，負責所有看不見的運算與邏輯處理。'},
+    {id:'m2',name:'二. 運算邏輯與數值系統',colorIdx:4,colorId:'green',color:'#20b65c',desc:'The Mechanics — 這是項目的靈魂，決定了遊戲的深度、平衡性與挑戰性。'},
+    {id:'m3',name:'三. 表現層與交互介面',colorIdx:8,colorId:'violet',color:'#bc29e0',desc:'The Presentation — 這是項目的皮膚，決定了玩家的第一印象與操作流暢度。'},
+    {id:'m4',name:'四. 工具鏈與生產流程',colorIdx:1,colorId:'orange',color:'#e89417',desc:'The Pipeline — 這是項目的後勤，確保你能高效產出內容，而不是淹沒在代碼中。'},
+  ],
+  subBranches:[
+    // 一. 天藍族 (azure) — L2[0]=#1b90da, L2[4]=#1b40da
+    {id:'s1a',mainId:'m1',colorIdx:6,colorId:'azure',name:'A. 靜態數據庫',color:'#1b90da',desc:'Data Registry — 郡國座標系統、歷史武將庫、行政區劃表。定義 108 郡國的邊界點位與地理屬性（山川、河流、關隘），存儲數千名武將的基礎數值與技能代碼，建立「州—郡—縣」層級邏輯。'},
+    {id:'s1b',mainId:'m1',colorIdx:6,colorId:'azure',name:'B. 物理與邏輯引擎',color:'#1b40da',desc:'Logic Kernel — 領土連接算法、路徑導航系統、二進制壓縮協議。基於連通圖的擴張邏輯、A*/Dijkstra 路徑計算，以及二進制格式的地圖數據壓縮。'},
+    // 二. 綠族 (green) — L2[0]=#20b640, L2[3]=#20b670, L2[6]=#28cc74
+    {id:'s2a',mainId:'m2',colorIdx:4,colorId:'green',name:'A. 戰鬥結算系統',color:'#20b640',desc:'Battle Resolver — 戰力公式、戰損模型。計算兵力、將領能力、兵種克制與地形加成的加權結果，模擬減員、潰散與傷兵轉換邏輯。'},
+    {id:'s2b',mainId:'m2',colorIdx:4,colorId:'green',name:'B. 戰略 AI 行為中心',color:'#20b670',desc:'Strategic AI — 目標評估器、外交與性格模型。AI 判斷「防禦屯田」或「集結進攻」的邏輯，以及不同歷史人物（曹操、袁紹）的決策偏好差異。'},
+    {id:'s2c',mainId:'m2',colorIdx:4,colorId:'green',name:'C. 動態經濟系統',color:'#28cc74',desc:'Economic Simulation — 物資流轉、民心與開發。錢糧在城市間的運輸損耗與徵收效率，以及內政指令對土地產出與暴動機率的長期影響。'},
+    // 三. 紫族 (violet) — L2[0]=#9029e0, L2[3]=#cc29e0
+    {id:'s3a',mainId:'m3',colorIdx:8,colorId:'violet',name:'A. 圖形渲染管線',color:'#9029e0',desc:'Graphics Pipeline — 像素地圖渲染、戰爭迷霧、特效管理器。優化 9.6M 像素顯示、動態計算勢力視野的平滑遮罩渲染、戰鬥動畫與天候特效。'},
+    {id:'s3b',mainId:'m3',colorIdx:8,colorId:'violet',name:'B. 用戶體驗與交互',color:'#cc29e0',desc:'UX/UI — 地圖交互邏輯、資訊視圖層級。點選、多選、長按菜單與懸浮資訊；確保在手機螢幕上清晰顯示州郡分佈、勢力範疇與軍隊動態。'},
+    // 四. 橙族 (orange) — L2[2]=#e89417（與L1同色，族內唯一次版塊）
+    {id:'s4a',mainId:'m4',colorIdx:1,colorId:'orange',name:'A. 內容編輯器',color:'#e89417',desc:'Content Tools — 地圖編輯器、劇本編譯器。視覺化界面調整郡國邊界，以及將 Excel 歷史劇本一鍵轉化為遊戲可讀代碼。'},
+  ],
+  leafBranches:[
+    // 一A. 靜態數據庫 → azure L3[0,1,2]
+    {id:'l1a1',subId:'s1a',colorIdx:6,colorId:'azure',name:'1. 郡國座標系統',color:'#081e40',desc:'定義 108 郡國的邊界點位與地理屬性（山川、河流、關隘）。'},
+    {id:'l1a2',subId:'s1a',colorIdx:6,colorId:'azure',name:'2. 歷史武將庫',color:'#0c2d5f',desc:'存儲數千名武將的基礎數值、技能代碼及歷史關聯。'},
+    {id:'l1a3',subId:'s1a',colorIdx:6,colorId:'azure',name:'3. 行政區劃表',color:'#103c7f',desc:'建立「州—郡—縣」的層級邏輯與歸屬關係。'},
+    // 一B. 物理與邏輯引擎 → azure L3[3,4,5]（與s1a錯開深淺）
+    {id:'l1b1',subId:'s1b',colorIdx:6,colorId:'azure',name:'1. 領土連接算法',color:'#144da3',desc:'基於連通圖的擴張邏輯，判斷勢力邊境與封閉區域（Enclave）。'},
+    {id:'l1b2',subId:'s1b',colorIdx:6,colorId:'azure',name:'2. 路徑導航系統',color:'#195fc8',desc:'負責軍隊在 9.6M 像素地圖上的移動路徑計算（A* 或 Dijkstra 算法優化版）。'},
+    {id:'l1b3',subId:'s1b',colorIdx:6,colorId:'azure',name:'3. 二進制壓縮協議',color:'#2572e4',desc:'為了單機流暢度，將地圖數據壓縮為二進制格式，減少記憶體占用。'},
+    // 二A. 戰鬥結算 → green L3[0,1]
+    {id:'l2a1',subId:'s2a',colorIdx:4,colorId:'green',name:'1. 戰力公式',color:'#0b3d1f',desc:'計算兵力、將領能力、兵種克制與地形加成的加權結果。'},
+    {id:'l2a2',subId:'s2a',colorIdx:4,colorId:'green',name:'2. 戰損模型',color:'#105b2e',desc:'模擬真實戰爭中的減員、潰散與傷兵轉換邏輯。'},
+    // 二B. 戰略AI → green L3[2,3]
+    {id:'l2b1',subId:'s2b',colorIdx:4,colorId:'green',name:'1. 目標評估器',color:'#15793d',desc:'AI 如何判斷當前該「防禦屯田」還是「集結進攻」。'},
+    {id:'l2b2',subId:'s2b',colorIdx:4,colorId:'green',name:'2. 外交與性格模型',color:'#1c9c4f',desc:'不同歷史人物（如曹操與袁紹）在面對威脅時的決策偏好差異。'},
+    // 二C. 動態經濟 → green L3[4,5]
+    {id:'l2c1',subId:'s2c',colorIdx:4,colorId:'green',name:'1. 物資流轉',color:'#22bf60',desc:'錢糧在城市間的運輸損耗與徵收效率計算。'},
+    {id:'l2c2',subId:'s2c',colorIdx:4,colorId:'green',name:'2. 民心與開發',color:'#2fda73',desc:'內政指令對土地產出與暴動機率的長期影響。'},
+    // 三A. 圖形渲染 → violet L3[0,1,2]
+    {id:'l3a1',subId:'s3a',colorIdx:8,colorId:'violet',name:'1. 像素地圖渲染',color:'#34093e',desc:'優化 9.6M 像素的顯示，實現無縫縮放與拖動不掉幀。'},
+    {id:'l3a2',subId:'s3a',colorIdx:8,colorId:'violet',name:'2. 戰爭迷霧',color:'#4e0d5e',desc:'動態計算勢力視野，並進行平滑遮罩渲染。'},
+    {id:'l3a3',subId:'s3a',colorIdx:8,colorId:'violet',name:'3. 特效管理器',color:'#68127d',desc:'管理戰鬥動畫、天候變化與 UI 轉場特效。'},
+    // 三B. UX/UI → violet L3[3,4]（與s3a錯開）
+    {id:'l3b1',subId:'s3b',colorIdx:8,colorId:'violet',name:'1. 地圖交互邏輯',color:'#8517a1',desc:'點選、多選、長按菜單與懸浮資訊顯示。'},
+    {id:'l3b2',subId:'s3b',colorIdx:8,colorId:'violet',name:'2. 資訊視圖層級',color:'#a31cc4',desc:'確保在手機螢幕上，玩家能清晰看到州郡分佈、勢力範疇與軍隊動態。'},
+    // 四A. 內容編輯器 → orange L3[0,1]
+    {id:'l4a1',subId:'s4a',colorIdx:1,colorId:'orange',name:'1. 地圖編輯器',color:'#412a06',desc:'讓你能在視覺化界面調整郡國邊界，而非手寫座標。'},
+    {id:'l4a2',subId:'s4a',colorIdx:1,colorId:'orange',name:'2. 劇本編譯器',color:'#613e0a',desc:'將 Excel 裡的歷史劇本、事件對話一鍵轉化為遊戲可讀代碼。'},
+  ],
+  // 圓餅圖用（與 mainBranches 同步，L1 色）
+  branches:[
+    {id:'m1',name:'一. 核心引擎與數據架構',color:'#1b67da'},
+    {id:'m2',name:'二. 運算邏輯與數值系統',color:'#20b65c'},
+    {id:'m3',name:'三. 表現層與交互介面',color:'#bc29e0'},
+    {id:'m4',name:'四. 工具鏈與生產流程',color:'#e89417'},
+  ],
+  nodes:[
+    {id:'root',title:'DevLog',isRoot:true,branchId:null,topic:'',reason:'',content:'',walkthrough:'',prompt:'',tags:[],fails:[],images:[],files:[],children:[],parentId:null},
+  ],
+  // journalNodes 已廢棄，日誌直接對應節點
+
+
+let selectedId=null,movingId=null,ctxId=null;
+let navHist=[],navIdx=-1;
+let viewMode='pie'; // 'pie' | 'folder'
+const schemaMode='new'; // 固定新模式
+let _copyNodeHistory=[];
+let _insertedNodeIds=new Set();
+
+// ═══════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════
+function node(id){return S.nodes.find(n=>n.id===id);}
+function hex2rgba(h,a){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
+function nodeColor(n){
+  if(n.isRoot)return'#ffffff';
+  // search across all tiers
+  const allBranches=[...(S.branches||[]),...(S.mainBranches||[]),...(S.subBranches||[]),...(S.leafBranches||[])];
+  const b=allBranches.find(b=>b.id===n.branchId);
+  return b?b.color:'#6b7a96';
+}
+function hasFail(nd){return nd.fails&&nd.fails.length>0;}
+function hasAncestorFail(id){
+  let nd=node(id);
+  while(nd&&nd.parentId){const p=node(nd.parentId);if(p&&hasFail(p))return true;nd=p;}
+  return false;
+}
+function getAncestorFails(id){
+  const res=[];let nd=node(id);
+  while(nd&&nd.parentId){const p=node(nd.parentId);if(p&&hasFail(p))res.push({from:p.title,fails:p.fails});nd=p;}
+  return res;
+}
+function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify(S));}catch(e){}}
+function load(){
+  try{
+    const d=localStorage.getItem(STORE_KEY);
+    if(d){
+      const parsed=JSON.parse(d);
+      S=parsed;
+      if(!S.mainBranches)S.mainBranches=[];
+      if(!S.subBranches)S.subBranches=[];
+      if(!S.leafBranches)S.leafBranches=[];
+      if(!S.branches)S.branches=[];
+      S.nodes.forEach(n=>{if(n.topic===undefined)n.topic='';});
+      // migrate v2: 強制重算 color，對齊色彩系統 v2（L1/L2_VARIANTS/L3_SHADES）
+      (S.mainBranches||[]).forEach(m=>{
+        if(!m.colorId)m.colorId=L1_COLORS[m.colorIdx%L1_COLORS.length]?.id||'gray';
+        const l1=L1_COLORS.find(c=>c.id===m.colorId);
+        if(l1)m.color=l1.hex;
+      });
+      (S.subBranches||[]).forEach(s=>{
+        const main=(S.mainBranches||[]).find(m=>m.id===s.mainId);
+        if(!s.colorId)s.colorId=main?.colorId||L1_COLORS[s.colorIdx%L1_COLORS.length]?.id||'gray';
+        const variants=L2_VARIANTS[s.colorId]||L2_VARIANTS.gray;
+        const siblings=(S.subBranches||[]).filter(x=>x.mainId===s.mainId);
+        const idx=siblings.indexOf(s);
+        s.color=variants[idx%variants.length];
+      });
+      (S.leafBranches||[]).forEach(l=>{
+        const sub=(S.subBranches||[]).find(s=>s.id===l.subId);
+        const main=(S.mainBranches||[]).find(m=>m.id===sub?.mainId);
+        if(!l.colorId)l.colorId=main?.colorId||L1_COLORS[l.colorIdx%L1_COLORS.length]?.id||'gray';
+        const siblings=(S.leafBranches||[]).filter(x=>x.subId===l.subId);
+        const idx=siblings.indexOf(l);
+        l.color=getShadeColor(l.colorId,idx);
+      });
+    }else{
+      // Fresh init
+    }
+  }catch(e){}
+  syncBranchesToMain();
+}
+function syncBranchesToMain(){
+  if(S.mainBranches&&S.mainBranches.length>0){
+    // branches 用 L1 深色（圓餅圖主扇區）
+    S.branches=S.mainBranches.map(m=>({id:m.id,name:m.name,color:m.color}));
+  }
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.opacity='0',2600);}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  if(!document.querySelector('.modal-overlay.open')){
+    document.getElementById('canvas-wrap').style.touchAction='';
+  }
+}
+function _openModal(id){
+  document.getElementById('canvas-wrap').style.touchAction='auto';
+  document.getElementById(id).classList.add('open');
+}
+
+// Make all modals scrollable on iOS by handling touch on .modal directly
+(function(){
+  let _mTouchY=0;
+  document.addEventListener('touchstart',function(e){
+    const modal=e.target.closest('.modal');
+    if(modal){_mTouchY=e.touches[0].clientY;}
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    const overlay=e.target.closest('.modal-overlay');
+    if(!overlay)return;
+    const modal=e.target.closest('.modal');
+    if(!modal){e.preventDefault();return;} // touched the dark backdrop: block
+    // touched inside modal: allow scroll
+    const dy=_mTouchY - e.touches[0].clientY;
+    _mTouchY=e.touches[0].clientY;
+    const atTop=modal.scrollTop===0;
+    const atBot=modal.scrollTop+modal.clientHeight>=modal.scrollHeight-1;
+    if((dy<0&&atTop)||(dy>0&&atBot)){e.preventDefault();return;}
+    modal.scrollTop+=dy;
+    e.preventDefault();
+  },{passive:false});
+})();
+
+// ═══════════════════════════════════
+// VIEW MODE
+// ═══════════════════════════════════
+function setViewMode(m){
+  viewMode=m;
+  document.getElementById('vt-pie').classList.toggle('active',m==='pie');
+  document.getElementById('vt-folder').classList.toggle('active',m==='folder');
+  document.getElementById('canvas-wrap').style.display=m==='pie'?'':'none';
+  const fv=document.getElementById('folder-view');
+  const panel=document.getElementById('panel');
+  if(m==='folder'){
+    fv.classList.add('active');
+    panel.classList.add('folder-overlay');
+    renderFolderView();
+  } else {
+    fv.classList.remove('active');
+    panel.classList.remove('folder-overlay');
+    fullRender();
+  }
+}
+
+// ═══════════════════════════════════
+// CANVAS / VIEWPORT
+// ═══════════════════════════════════
+const wrap=document.getElementById('canvas-wrap');
+const CVS=document.getElementById('graph-canvas');
+const cx=CVS.getContext('2d');
+const NL=document.getElementById('nodes-layer');
+
+let vp={x:0,y:0,s:1};
+let panning=false,panS={x:0,y:0},vpS={x:0,y:0};
+let _rafPending=false;
+let positions={};
+
+function w2s(wx,wy){return{x:wx*vp.s+vp.x+CVS.width/2,y:wy*vp.s+vp.y+CVS.height/2};}
+function resize(){
+  CVS.width=wrap.clientWidth;CVS.height=wrap.clientHeight;
+  if(viewMode==='pie'){drawEdges();positionNodes();}
+}
+function zoom(f){vp.s=Math.min(3,Math.max(0.15,vp.s*f));drawEdges();positionNodes();}
+function resetView(){vp={x:0,y:0,s:1};drawEdges();positionNodes();}
+
+// Mouse pan
+wrap.addEventListener('mousedown',e=>{
+  if(e.target===wrap||e.target===CVS||e.target===NL){
+    panning=true;panS={x:e.clientX,y:e.clientY};vpS={x:vp.x,y:vp.y};wrap.classList.add('grabbing');
+  }
+});
+window.addEventListener('mousemove',e=>{
+  if(!panning)return;
+  vp.x=vpS.x+(e.clientX-panS.x);vp.y=vpS.y+(e.clientY-panS.y);
+  _scheduleRender();
+});
+window.addEventListener('mouseup',()=>{panning=false;wrap.classList.remove('grabbing');});
+wrap.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=e.deltaY<0?1.1:.91;
+  const r=wrap.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  const wx=(mx-vp.x-CVS.width/2)/vp.s,wy=(my-vp.y-CVS.height/2)/vp.s;
+  vp.s=Math.min(3,Math.max(0.15,vp.s*f));
+  vp.x=mx-CVS.width/2-wx*vp.s;vp.y=my-CVS.height/2-wy*vp.s;
+  _scheduleRender();
+},{passive:false});
+wrap.addEventListener('click',e=>{
+  if(e.target===wrap||e.target===CVS||e.target===NL){
+    if(movingId){movingId=null;positionNodes();}hideCtx();
+  }
+});
+document.addEventListener('click',hideCtx);
+
+// Touch pan + pinch
+let _touches={},_tpStart=null,_tvpStart=null;
+// Pinch：記錄手勢開始時的完整快照，避免累積誤差
+let _pinchActive=false,_pinch0={d:0,s:0,vpx:0,vpy:0,mx:0,my:0};
+function _tdist(a,b){return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);}
+function _tmid(a,b,r){return{x:(a.clientX+b.clientX)/2-r.left,y:(a.clientY+b.clientY)/2-r.top};}
+
+function _scheduleRender(){
+  if(_rafPending)return;
+  _rafPending=true;
+  requestAnimationFrame(()=>{_rafPending=false;drawEdges();positionNodes();});
+}
+
+wrap.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t=>{_touches[t.identifier]=t;});
+  const pts=Object.values(_touches);
+  if(pts.length===1){
+    // 單指平移：記錄起點快照
+    _tpStart={x:pts[0].clientX,y:pts[0].clientY};
+    _tvpStart={x:vp.x,y:vp.y};
+    _pinchActive=false;
+  } else if(pts.length===2){
+    // 雙指 pinch：在手勢開始時一次性快照所有基準值，move 裡只做插值
+    const r=wrap.getBoundingClientRect();
+    const mid=_tmid(pts[0],pts[1],r);
+    _pinch0={
+      d:_tdist(pts[0],pts[1]),
+      s:vp.s,
+      vpx:vp.x,vpy:vp.y,
+      mx:mid.x,my:mid.y,
+      // 快照手勢起點對應的 world 座標
+      wx:(mid.x-vp.x-CVS.width/2)/vp.s,
+      wy:(mid.y-vp.y-CVS.height/2)/vp.s,
+    };
+    _pinchActive=true;
+    _tpStart=null;
+  }
+},{passive:false});
+
+wrap.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t=>{_touches[t.identifier]=t;});
+  const pts=Object.values(_touches);
+  if(pts.length===1&&_tpStart&&!_pinchActive){
+    // 單指平移：相對起點快照做 delta，不累積誤差
+    vp.x=_tvpStart.x+(pts[0].clientX-_tpStart.x);
+    vp.y=_tvpStart.y+(pts[0].clientY-_tpStart.y);
+    _scheduleRender();
+  } else if(pts.length>=2&&_pinchActive){
+    const r=wrap.getBoundingClientRect();
+    const d=_tdist(pts[0],pts[1]);
+    const ns=Math.min(3,Math.max(0.15,_pinch0.s*d/_pinch0.d));
+    // 用快照 world 座標反推新 viewport，確保縮放中心不飄移
+    vp.s=ns;
+    vp.x=_pinch0.mx-CVS.width/2-_pinch0.wx*ns;
+    vp.y=_pinch0.my-CVS.height/2-_pinch0.wy*ns;
+    _scheduleRender();
+  }
+},{passive:false});
+
+wrap.addEventListener('touchend',e=>{
+  Array.from(e.changedTouches).forEach(t=>{delete _touches[t.identifier];});
+  const pts=Object.values(_touches);
+  if(pts.length===1){
+    // 從雙指回到單指：重設平移基準
+    _tpStart={x:pts[0].clientX,y:pts[0].clientY};
+    _tvpStart={x:vp.x,y:vp.y};
+    _pinchActive=false;
+  } else if(pts.length===0){
+    _tpStart=null;_pinchActive=false;
+  }
+},{passive:false});
+
+// ═══════════════════════════════════
+// SECTOR (PIE) DRAWING — on cx (drawn before edges)
+// ═══════════════════════════════════
+const PIE_R=42;     // 主版塊內圈半徑（world units）
+const PIE_R2=72;    // 次版塊外圈半徑（world units）
+const PIE_R3=100;   // 三級版塊外圈半徑（world units）
+
+// 中文數字標籤
+const HAN_NUM=['一','二','三','四','五','六','七','八','九','十'];
+
+function drawSectors(){
+  const nb=S.mainBranches&&S.mainBranches.length?S.mainBranches.length:S.branches.length;
+  if(!nb)return;
+  const ctr=w2s(0,0);
+  const r1=PIE_R*vp.s;    // 主版塊外緣
+  const r2=PIE_R2*vp.s;   // 次版塊外緣
+  const r3=PIE_R3*vp.s;   // 三級版塊外緣
+  const slice=Math.PI*2/nb;
+  const mains=S.mainBranches&&S.mainBranches.length?S.mainBranches:S.branches;
+
+  // ── 第三圈：三級版塊 ──
+  mains.forEach((m,i)=>{
+    const a0=-Math.PI/2+slice*i,a1=a0+slice;
+    const subs=(S.subBranches||[]).filter(s=>s.mainId===m.id);
+    if(!subs.length){
+      _drawRing(ctr,r2,r3,a0,a1,m.color,0.10,0.25,0.6);
+      return;
+    }
+    const subSlice=(a1-a0)/subs.length;
+    subs.forEach((s,j)=>{
+      const sa0=a0+subSlice*j,sa1=sa0+subSlice;
+      const leaves=(S.leafBranches||[]).filter(l=>l.subId===s.id);
+      if(!leaves.length){
+        _drawRing(ctr,r2,r3,sa0,sa1,s.color,0.10,0.25,0);
+        return;
+      }
+      const leafSlice=(sa1-sa0)/leaves.length;
+      leaves.forEach((l,k)=>{
+        const la0=sa0+leafSlice*k,la1=la0+leafSlice;
+        _drawRing(ctr,r2,r3,la0,la1,l.color,0.14,0.35,0);
+        // 三級標籤（數字）
+        if(r3-r2>14){
+          const am=(la0+la1)/2,lr=(r2+r3)/2;
+          const fz=Math.max(6,Math.min(10,vp.s*8));
+          cx.fillStyle=hex2rgba(l.color,.75);
+          cx.font=`600 ${fz}px JetBrains Mono,monospace`;
+          cx.textAlign='center';cx.textBaseline='middle';
+          cx.fillText(String(k+1),ctr.x+Math.cos(am)*lr,ctr.y+Math.sin(am)*lr);
+        }
+      });
+    });
+  });
+
+  // ── 第二圈：次版塊 ──
+  mains.forEach((m,i)=>{
+    const a0=-Math.PI/2+slice*i,a1=a0+slice;
+    const subs=(S.subBranches||[]).filter(s=>s.mainId===m.id);
+    if(!subs.length){
+      _drawRing(ctr,r1,r2,a0,a1,m.color,0.12,0.30,0);
+      return;
+    }
+    const subSlice=(a1-a0)/subs.length;
+    subs.forEach((s,j)=>{
+      const sa0=a0+subSlice*j,sa1=sa0+subSlice;
+      _drawRing(ctr,r1,r2,sa0,sa1,s.color,0.16,0.38,0);
+      // 次版塊標籤（A/B/C）
+      if(r2-r1>14){
+        const am=(sa0+sa1)/2,lr=(r1+r2)/2;
+        const abbr=String.fromCharCode(65+j);
+        const fz=Math.max(7,Math.min(11,vp.s*9));
+        cx.fillStyle=hex2rgba(s.color,.8);
+        cx.font=`700 ${fz}px JetBrains Mono,monospace`;
+        cx.textAlign='center';cx.textBaseline='middle';
+        cx.fillText(abbr,ctr.x+Math.cos(am)*lr,ctr.y+Math.sin(am)*lr);
+      }
+    });
+    // 主版塊邊界線延伸到 r3
+    cx.beginPath();cx.moveTo(ctr.x+Math.cos(a0)*r1,ctr.y+Math.sin(a0)*r1);
+    cx.lineTo(ctr.x+Math.cos(a0)*r3,ctr.y+Math.sin(a0)*r3);
+    cx.strokeStyle=hex2rgba(m.color,.45);cx.lineWidth=1;cx.stroke();
+  });
+
+  // ── 第一圈：主版塊（最深色，最內） ──
+  mains.forEach((b,i)=>{
+    const a0=-Math.PI/2+slice*i,a1=a0+slice;
+    cx.beginPath();cx.moveTo(ctr.x,ctr.y);cx.arc(ctr.x,ctr.y,r1,a0,a1);cx.closePath();
+    cx.fillStyle=hex2rgba(b.color,.22);cx.fill();
+    cx.strokeStyle=hex2rgba(b.color,.6);cx.lineWidth=1.5;cx.stroke();
+    // 標籤：中文數字
+    const am=(a0+a1)/2,lr=r1*0.58;
+    const label=HAN_NUM[i]||String(i+1);
+    const fz=Math.max(10,Math.min(18,vp.s*14));
+    cx.fillStyle=hex2rgba(b.color,.95);
+    cx.font=`700 ${fz}px Noto Sans TC,sans-serif`;
+    cx.textAlign='center';cx.textBaseline='middle';
+    cx.fillText(label,ctr.x+Math.cos(am)*lr,ctr.y+Math.sin(am)*lr);
+  });
+
+  // ── 外圈裝飾線 ──
+  cx.beginPath();cx.arc(ctr.x,ctr.y,r3,0,Math.PI*2);
+  cx.strokeStyle='rgba(255,255,255,.05)';cx.lineWidth=1;cx.stroke();
+}
+
+// 畫環形扇片輔助
+function _drawRing(ctr,rIn,rOut,a0,a1,color,fillA,strokeA,labelR){
+  cx.beginPath();
+  cx.moveTo(ctr.x+Math.cos(a0)*rIn,ctr.y+Math.sin(a0)*rIn);
+  cx.arc(ctr.x,ctr.y,rOut,a0,a1);
+  cx.arc(ctr.x,ctr.y,rIn,a1,a0,true);
+  cx.closePath();
+  cx.fillStyle=hex2rgba(color,fillA);cx.fill();
+  cx.strokeStyle=hex2rgba(color,strokeA);cx.lineWidth=0.7;cx.stroke();
+}
+
+
+
+
+// ═══════════════════════════════════
+// LAYOUT  ── 珍珠奶茶模型 v2（三大 bug 修正版）
+//   正確路徑（吸管）: 沿 midAngle 筆直延伸，遞增 r
+//   錯誤節點（珍珠）: 在版塊扇形內螺旋排列，嚴格不超出邊界
+// ═══════════════════════════════════
+const NODE_MIN_GAP = 52;   // 最小節點間距（world units）
+const BASE_STEP    = 120;  // 正確路徑每層推進距離
+const FIRST_R      = PIE_R3 + 45; // 第一層節點距離中心
+const NODE_R       = 17;   // 節點半徑（用於碰撞檢測）
+
+function calcLayout(){
+  positions['root']={x:0,y:0};
+  const root=node('root');if(!root)return;
+  const nb=(S.mainBranches&&S.mainBranches.length?S.mainBranches.length:S.branches.length)||1;
+  const slice=Math.PI*2/nb;
+
+  // group direct children by branch
+  const byBranch={};
+  root.children.forEach(cid=>{
+    const nd=node(cid);if(!nd)return;
+    const bid=nd.branchId||'_none';
+    if(!byBranch[bid])byBranch[bid]=[];
+    byBranch[bid].push(cid);
+  });
+
+  // 找出節點屬於哪個主版塊角度
+  function getBranchMainIdx(branchId){
+    if(!branchId)return -1;
+    const mains=S.mainBranches&&S.mainBranches.length?S.mainBranches:S.branches;
+    // 直接是主版塊
+    let idx=mains.findIndex(m=>m.id===branchId);
+    if(idx>=0)return idx;
+    // 是次版塊
+    const sub=(S.subBranches||[]).find(s=>s.id===branchId);
+    if(sub)return mains.findIndex(m=>m.id===sub.mainId);
+    // 是三級版塊
+    const leaf=(S.leafBranches||[]).find(l=>l.id===branchId);
+    if(leaf){const sub2=(S.subBranches||[]).find(s=>s.id===leaf.subId);if(sub2)return mains.findIndex(m=>m.id===sub2.mainId);}
+    return -1;
+  }
+  const mains=S.mainBranches&&S.mainBranches.length?S.mainBranches:S.branches;
+  // 重新分組：按主版塊索引
+  const byMain={};
+  root.children.forEach(cid=>{
+    const nd=node(cid);if(!nd)return;
+    const mi=getBranchMainIdx(nd.branchId);
+    const key=mi>=0?String(mi):'_none';
+    if(!byMain[key])byMain[key]=[];
+    byMain[key].push(cid);
+  });
+  mains.forEach((b,bi)=>{
+    const midA=-Math.PI/2+slice*bi+slice/2;
+    const halfSpan=slice/2*0.82;
+    const ids=byMain[String(bi)]||[];
+    placeBobaLayer(ids, midA, halfSpan, FIRST_R);
+  });
+
+  // none-branch fallback
+  const noneIds=byBranch['_none']||[];
+  noneIds.forEach((cid,i)=>{
+    const a=(Math.PI*2/Math.max(1,noneIds.length))*i;
+    const r=FIRST_R;
+    positions[cid]={x:Math.cos(a)*r,y:Math.sin(a)*r};
+    const nd=node(cid);
+    if(nd&&nd.children.length) layoutSubBoba(cid,a,slice/2,r);
+  });
+}
+
+// ── Bug 修正核心 ──
+// midA      : 版塊中心角度
+// halfSpan  : 版塊半寬角（限制節點不超出版塊）
+// baseR     : 本層起始半徑
+function placeBobaLayer(ids, midA, halfSpan, baseR){
+  if(!ids.length)return;
+
+  // 分離正確路徑 vs 錯誤節點
+  const clean=ids.filter(id=>{const n=node(id);return n&&!hasFail(n)&&!hasAncestorFail(id);});
+  const errs =ids.filter(id=>{const n=node(id);return n&&(hasFail(n)||hasAncestorFail(id));});
+
+  // ── 吸管：正確節點沿 midA 延伸 ──
+  clean.forEach((cid,i)=>{
+    const r=baseR+i*BASE_STEP;
+    positions[cid]={x:Math.cos(midA)*r,y:Math.sin(midA)*r};
+    const nd=node(cid);
+    if(nd&&nd.children.length) layoutSubBoba(cid,midA,halfSpan,r);
+  });
+
+  // ── 珍珠：錯誤節點在扇形內螺旋排列（Bug 1+2+3 修正）──
+  // 策略：從 baseR 開始，沿半徑方向和角度方向雙重排列
+  // 確保每個節點都在 [midA-halfSpan, midA+halfSpan] 之內
+  // 且相互不重疊
+  if(!errs.length)return;
+
+  // 計算扇形可容納的「列」數（角度方向）和「行」數（半徑方向）
+  const angStep = (NODE_MIN_GAP+4); // 角度方向步長（world units 弧長近似）
+  const radStep = NODE_MIN_GAP+8;   // 半徑方向步長
+
+  // 以格網方式填充：先橫排（角度），再往外推（半徑）
+  // 確保角度偏移換算成弧度後不超出 halfSpan
+  let placed=[];
+  let r=baseR;
+  let errIdx=0;
+
+  while(errIdx<errs.length){
+    // 本圓弧層可容納幾個節點
+    const arcLen=2*halfSpan*r; // 可用弧長（world units）
+    const maxPerRow=Math.max(1,Math.floor(arcLen/angStep));
+    const rowCount=Math.min(maxPerRow,errs.length-errIdx);
+
+    // 平均分佈在 [-halfSpan, +halfSpan] 內
+    for(let j=0;j<rowCount;j++){
+      const cid=errs[errIdx++];
+      let angOffset;
+      if(rowCount===1){
+        // 只有一個：放在版塊邊側，不擋吸管中心
+        angOffset=halfSpan*0.45;
+      } else {
+        // 均勻分佈，確保不超出邊界
+        const t=rowCount===1?0:(j/(rowCount-1)-0.5)*2; // -1 ~ +1
+        angOffset=t*halfSpan*0.9;
+      }
+      const a=midA+angOffset;
+      positions[cid]={x:Math.cos(a)*r,y:Math.sin(a)*r};
+      placed.push({id:cid,a,r});
+      const nd=node(cid);
+      // Bug 3 修正：子節點繼承版塊角度範圍，確保不連到中心
+      if(nd&&nd.children.length) layoutSubBoba(cid,a,halfSpan*0.4,r);
+    }
+    r+=radStep;
+  }
+}
+
+function layoutSubBoba(pid,midA,halfSpan,parentR){
+  const p=node(pid);if(!p||!p.children.length)return;
+  const nextBaseR=parentR+BASE_STEP;
+  placeBobaLayer(p.children,midA,halfSpan,nextBaseR);
+}
+
+// ═══════════════════════════════════
+// DRAW EDGES (sectors first, then edges — all on cx)
+// ═══════════════════════════════════
+function drawEdges(){
+  cx.clearRect(0,0,CVS.width,CVS.height);
+  drawSectors(); // sectors underneath edges, same canvas, no black fill
+  S.nodes.forEach(nd=>{
+    (nd.children||[]).forEach(cid=>{
+      const p1=positions[nd.id],p2=positions[cid];
+      // Bug 3 保護：若 position 缺失或指向原點(0,0)且不是 root，跳過此連線
+      if(!p1||!p2)return;
+      if(nd.id!=='root'&&p1.x===0&&p1.y===0)return;
+      if(node(cid)&&!node(cid).isRoot&&p2.x===0&&p2.y===0)return;
+      const s1=w2s(p1.x,p1.y),s2=w2s(p2.x,p2.y);
+      const ch=node(cid);
+      const col=nodeColor(ch);
+      const isErr=hasFail(ch)||hasAncestorFail(cid);
+      cx.beginPath();cx.moveTo(s1.x,s1.y);
+      cx.quadraticCurveTo((s1.x+s2.x)/2,(s1.y+s2.y)/2,s2.x,s2.y);
+      cx.strokeStyle=isErr?hex2rgba('#ff4d6a',.22):hex2rgba(col,.45);
+      cx.lineWidth=(isErr?.8:1.5)*vp.s;cx.stroke();
+    });
+  });
+}
+
+// ═══════════════════════════════════
+// DOM NODES
+// ═══════════════════════════════════
+const nodeEls={};
+
+function positionNodes(){
+  S.nodes.forEach(nd=>{
+    const pos=positions[nd.id];if(!pos)return;
+    const sp=w2s(pos.x,pos.y);
+    let el=nodeEls[nd.id];
+    const isNew=!el;
+    if(isNew){el=createNodeEl(nd);nodeEls[nd.id]=el;NL.appendChild(el);}
+    // transform 是 GPU composited layer，不觸發 reflow
+    el.style.transform=`translate(calc(${sp.x}px - 50%),calc(${sp.y}px - 50%))`;
+    updateNodeAppearance(el,nd,isNew);
+  });
+  Object.keys(nodeEls).forEach(id=>{if(!node(id)){nodeEls[id]?.remove();delete nodeEls[id];}});
+}
+
+function createNodeEl(nd){
+  const el=document.createElement('div');
+  el.className='node'+(nd.isRoot?' is-root':'');
+  el.id='nel-'+nd.id;
+  // Desktop click
+  el.addEventListener('click',e=>{e.stopPropagation();onNodeClick(nd.id);});
+  // Mobile tap：只在手指幾乎沒有位移時才觸發（避免滑動誤觸）
+  let _ts=null;
+  el.addEventListener('touchstart',e=>{
+    if(e.touches.length===1){_ts={x:e.touches[0].clientX,y:e.touches[0].clientY};}
+    else{_ts=null;}
+  },{passive:true});
+  el.addEventListener('touchend',e=>{
+    if(!_ts||e.changedTouches.length!==1){_ts=null;return;}
+    const dx=e.changedTouches[0].clientX-_ts.x;
+    const dy=e.changedTouches[0].clientY-_ts.y;
+    _ts=null;
+    if(Math.hypot(dx,dy)>8)return; // 超過 8px 視為滑動，不觸發點選
+    e.preventDefault();e.stopPropagation();onNodeClick(nd.id);
+  },{passive:false});
+  el.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();ctxId=nd.id;showCtx(e.clientX,e.clientY);});
+  return el;
+}
+
+// ── 建立節點 DOM 骨架（只呼叫一次）──
+function buildNodeDOM(el,nd){
+  const col=nodeColor(nd);
+  const hf=hasFail(nd);
+  const inh=!hf&&hasAncestorFail(nd.id);
+  const badgeHtml=hf
+    ?'<div class="fail-badge">✕</div>'
+    :inh?'<div class="err-inherited-badge">✕</div>'
+    :'';
+  el.innerHTML=`
+    <div class="node-ring" data-ring>
+      <span class="node-abbr">${nd.title.slice(0,2)}</span>
+      ${badgeHtml}
+    </div>
+    <div class="node-lbl" data-lbl>${nd.title}</div>`;
+  el.onclick=e=>{e.stopPropagation();onNodeClick(nd.id);};
+  el.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();ctxId=nd.id;showCtx(e.clientX,e.clientY);};
+}
+
+// ── 每幀只更新 style，不動 DOM 結構 ──
+function updateNodeAppearance(el,nd,forceRebuild){
+  const col=nodeColor(nd);
+  const baseRoot=54,baseNorm=34;
+  const sz=Math.round(Math.min(Math.max((nd.isRoot?baseRoot:baseNorm)*vp.s, nd.isRoot?14:9), nd.isRoot?100:68));
+  const fontSize=Math.round(Math.min(Math.max((nd.isRoot?12:9)*vp.s, 5), nd.isRoot?20:15));
+  const lblSize=Math.round(Math.min(Math.max(10*vp.s, 5), 13));
+  const glowR=Math.round((nd.isRoot?18:8)*vp.s);
+  const hf=hasFail(nd);
+  const inh=!hf&&hasAncestorFail(nd.id);
+  const isSel=nd.id===selectedId;
+  const isMove=nd.id===movingId;
+  el.classList.toggle('selected',isSel);
+  el.classList.toggle('moving',isMove);
+
+  // sig 分兩層：structSig 驅動 DOM 重建，styleSig 驅動 style 更新
+  const structSig=`${col}|${nd.title}|${hf}|${inh}`;
+  const styleSig=`${structSig}|${sz}|${isSel}`;
+  if(forceRebuild||el.dataset.structSig!==structSig){
+    buildNodeDOM(el,nd);
+    el.dataset.structSig=structSig;
+    el.dataset.styleSig=''; // force style update below
+  }
+  if(el.dataset.styleSig===styleSig)return;
+  el.dataset.styleSig=styleSig;
+
+  // 直接操作已有 DOM 元素的 style，不重建 innerHTML
+  const ring=el.querySelector('[data-ring]');
+  const lbl=el.querySelector('[data-lbl]');
+  const abbr=el.querySelector('.node-abbr');
+  if(!ring)return;
+  ring.style.cssText=`width:${sz}px;height:${sz}px;background:${hex2rgba(col,.1)};border-color:${col};box-shadow:0 0 ${glowR}px ${hex2rgba(col,.28)};font-size:${fontSize}px;color:${col};font-weight:600;`;
+  if(abbr)abbr.textContent=sz>=12?nd.title.slice(0,2):'';
+  if(lbl){
+    lbl.style.display=sz>=12?'':'none';
+    lbl.style.color=hex2rgba(col,.8);
+    lbl.style.fontSize=lblSize+'px';
+    lbl.textContent=nd.title;
+  }
+}
+
+// 保留舊名供外部呼叫相容
+function updateNodeEl(el,nd){updateNodeAppearance(el,nd,false);}
+
+function renderLegend(){
+  const mains=S.mainBranches&&S.mainBranches.length?S.mainBranches:S.branches;
+  document.getElementById('branch-legend').innerHTML=mains.map((b,i)=>`
+    <div class="legend-item" onclick="flashBranch('${b.id}')">
+      <div class="legend-dot" style="background:${b.color}"></div>
+      <span><b style="color:${b.color};margin-right:4px;">${HAN_NUM[i]||i+1}</b>${b.name.replace(/^[一二三四五六七八九十]+[.．、\s]*/,'')}</span>
+    </div>`).join('');
+}
+
+function fullRender(){calcLayout();drawEdges();positionNodes();renderLegend();}
+
+// ═══════════════════════════════════
+// NODE CLICK
+// ═══════════════════════════════════
+function onNodeClick(id){
+  if(movingId){
+    if(movingId===id){movingId=null;_scheduleRender();toast('取消移動');return;}
+    reparent(movingId,id);movingId=null;return;
+  }
+  selectedId=id;openPanel(id);hideCtx();_scheduleRender();
+}
+
+// ═══════════════════════════════════
+// PANEL
+// ═══════════════════════════════════
+function openPanel(id){
+  navPush(id);_renderPanel(id);
+  // track for copy doc
+  const nd=node(id);
+  if(nd&&!_copyNodeHistory.find(n=>n.id===id)){
+    _copyNodeHistory.push({id,title:nd.title,color:nodeColor(nd)});
+  }
+}
+function _renderPanel(id){
+  const nd=node(id);if(!nd)return;
+  document.getElementById('panel').classList.add('open');
+  const col=nodeColor(nd);
+  document.getElementById('panel-color-dot').style.background=col;
+  document.getElementById('panel-title').value=nd.title;
+  document.getElementById('panel-meta').textContent=`ID: ${id}  ·  子節點: ${nd.children.length}`;
+  document.getElementById('f-topic').value=nd.topic||'';
+  document.getElementById('f-reason').value=nd.reason||'';
+  document.getElementById('f-content').value=nd.content||'';
+  document.getElementById('f-walkthrough').value=nd.walkthrough||'';
+  document.getElementById('f-prompt').value=nd.prompt||'';
+  const sel=document.getElementById('branch-select');
+  // branch-select 顯示三層版塊結構
+  let branchOpts='<option value="">（無）</option>';
+  (S.mainBranches||[]).forEach(m=>{
+    branchOpts+=`<optgroup label="${m.name}">`;
+    (S.subBranches||[]).filter(s=>s.mainId===m.id).forEach(s=>{
+      branchOpts+=`<optgroup label="　${s.name}">`;
+      (S.leafBranches||[]).filter(l=>l.subId===s.id).forEach(l=>{
+        branchOpts+=`<option value="${l.id}"${nd.branchId===l.id?' selected':''}>${l.name}</option>`;
+      });
+      branchOpts+=`<option value="${s.id}"${nd.branchId===s.id?' selected':''}>（直屬 ${s.name}）</option>`;
+      branchOpts+='</optgroup>';
+    });
+    branchOpts+=`<option value="${m.id}"${nd.branchId===m.id?' selected':''}>（直屬 ${m.name}）</option>`;
+    branchOpts+='</optgroup>';
+  });
+  sel.innerHTML=branchOpts;
+  renderTags(nd);renderImages(nd);renderFiles(nd);renderFails(nd);updateNavBtns();
+}
+function closePanel(){
+  const panel=document.getElementById('panel');
+  panel.classList.remove('open');
+  document.getElementById('folder-backdrop').classList.remove('active');
+  selectedId=null;
+  if(viewMode!=='folder'){
+    setTimeout(()=>{resize();},230);
+  }
+}
+document.getElementById('panel-title').addEventListener('input',onFieldChange);
+function onFieldChange(){
+  const nd=node(selectedId);if(!nd)return;
+  nd.title=document.getElementById('panel-title').value;
+  nd.topic=document.getElementById('f-topic').value;
+  nd.reason=document.getElementById('f-reason').value;
+  nd.content=document.getElementById('f-content').value;
+  nd.walkthrough=document.getElementById('f-walkthrough').value;
+  nd.prompt=document.getElementById('f-prompt').value;
+  nd.branchId=document.getElementById('branch-select').value||null;
+  save();
+  const el=nodeEls[selectedId];if(el){el.dataset.sig='';updateNodeEl(el,nd);}
+  renderLegend();
+  if(viewMode==='folder')renderFolderView();
+}
+
+// Tags
+function renderTags(nd){
+  const w=document.getElementById('tags-wrap'),inp=document.getElementById('tag-input');
+  w.innerHTML='';
+  (nd.tags||[]).forEach((t,i)=>{
+    const d=document.createElement('div');d.className='tag';
+    d.innerHTML=`${t}<span class="tag-del" onclick="removeTag(${i})">×</span>`;w.appendChild(d);
+  });
+  w.appendChild(inp);
+}
+function onTagKey(e){if(e.key!=='Enter'&&e.key!==',')return;e.preventDefault();const v=e.target.value.trim().replace(',','');if(!v||!selectedId)return;const nd=node(selectedId);nd.tags=nd.tags||[];nd.tags.push(v);e.target.value='';renderTags(nd);save();}
+function removeTag(i){const nd=node(selectedId);nd.tags.splice(i,1);renderTags(nd);save();}
+
+// Images
+function renderImages(nd){
+  const w=document.getElementById('images-wrap');
+  w.innerHTML=(nd.images||[]).map((s,i)=>`<img class="img-thumb" src="${s}" onclick="openLb('${s}')"/>`).join('')+
+    `<div class="img-add" onclick="document.getElementById('img-input').click()">＋</div>
+     <input id="img-input" type="file" accept="image/*" multiple style="display:none" onchange="handleImgUpload(event)"/>`;
+}
+function handleImgUpload(e){
+  const nd=node(selectedId);if(!nd)return;nd.images=nd.images||[];
+  let done=0;const files=[...e.target.files];
+  files.forEach(f=>{const r=new FileReader();r.onload=ev=>{nd.images.push(ev.target.result);if(++done===files.length){renderImages(nd);save();}};r.readAsDataURL(f);});
+  e.target.value='';
+}
+
+// Files
+function fmtSz(b){return b<1024?b+'B':b<1048576?(b/1024).toFixed(1)+'KB':(b/1048576).toFixed(1)+'MB';}
+function fIcon(name){const e=name.split('.').pop().toLowerCase();return{js:'📜',ts:'📜',html:'🌐',css:'🎨',json:'📋',md:'📝',txt:'📄',pdf:'📕',zip:'📦',png:'🖼',jpg:'🖼'}[e]||'📎';}
+function renderFiles(nd){
+  const w=document.getElementById('files-wrap');
+  w.innerHTML=(nd.files||[]).map((f,i)=>`
+    <div class="file-item">
+      <span>${fIcon(f.name)}</span>
+      <span class="file-name" title="${f.name}">${f.name}</span>
+      <span class="file-sz">${f.size}</span>
+      <span class="file-del" onclick="removeFile(${i})">×</span>
+    </div>`).join('')+
+    `<div class="file-add" onclick="document.getElementById('file-input').click()">＋ 附加檔案</div>
+     <input id="file-input" type="file" multiple style="display:none" onchange="handleFileUpload(event)"/>`;
+}
+function handleFileUpload(e){
+  const nd=node(selectedId);if(!nd)return;nd.files=nd.files||[];
+  let done=0;const files=[...e.target.files];
+  files.forEach(f=>{const r=new FileReader();r.onload=ev=>{nd.files.push({name:f.name,size:fmtSz(f.size),data:ev.target.result});if(++done===files.length){renderFiles(nd);save();}};r.readAsDataURL(f);});
+  e.target.value='';
+}
+function removeFile(i){const nd=node(selectedId);nd.files.splice(i,1);renderFiles(nd);save();}
+
+// Fails
+function renderFails(nd){
+  const inh=getAncestorFails(nd.id);
+  let html=(nd.fails||[]).map((f,i)=>`
+    <div class="fail-item">
+      <span class="fail-x">✕</span>
+      <span style="flex:1">${f}</span>
+      <span class="fail-del" onclick="removeFail(${i})">×</span>
+    </div>`).join('');
+  if(inh.length){
+    html+=inh.map(af=>af.fails.map(f=>`
+    <div class="fail-item inherited">
+      <span class="fail-x">✕</span>
+      <div style="flex:1"><div>${f}</div><div class="fail-from">⛔ 此路不通 ── 繼承自「${af.from}」</div></div>
+    </div>`).join('')).join('');
+  }
+  document.getElementById('fail-list').innerHTML=html;
+}
+function addFail(){
+  const inp=document.getElementById('fail-input');const v=inp.value.trim();if(!v||!selectedId)return;
+  const nd=node(selectedId);nd.fails=nd.fails||[];nd.fails.push(v);inp.value='';
+  renderFails(nd);save();
+  const el=nodeEls[selectedId];if(el){el.dataset.sig='';updateNodeEl(el,nd);}
+  if(viewMode==='folder')renderFolderView();
+}
+function removeFail(i){
+  const nd=node(selectedId);nd.fails.splice(i,1);renderFails(nd);save();
+  const el=nodeEls[selectedId];if(el){el.dataset.sig='';updateNodeEl(el,nd);}
+}
+
+function addChildFromPanel(){if(!selectedId)return;const t=prompt('子日誌標題：');if(t)addNodeTo(t,selectedId);}
+function startMove(){
+  if(!selectedId||selectedId==='root')return;
+  movingId=selectedId;
+  // 直接關閉 panel，不走 closePanel()（避免 setTimeout resize 干擾移動模式）
+  document.getElementById('panel').classList.remove('open');
+  selectedId=null;
+  // 立刻 resize + 重繪，確保 moving 樣式正確顯示
+  resize();
+  toast('移動模式：點擊目標節點設為新的上層。點空白處取消。');
+}
+function deleteSelected(){if(!selectedId||selectedId==='root')return;if(!confirm('確認刪除此節點及所有子節點？'))return;deleteNode(selectedId);}
+
+// ═══════════════════════════════════
+// NODE OPS
+// ═══════════════════════════════════
+function addNodeTo(title,parentId,branchId){
+  const parent=node(parentId);if(!parent)return;
+  const id='n'+Date.now();
+  S.nodes.push({id,title,isRoot:false,branchId:branchId||parent.branchId||null,
+    topic:'',reason:'',content:'',walkthrough:'',prompt:'',tags:[],fails:[],images:[],files:[],children:[],parentId});
+  parent.children.push(id);
+  fullRender();save();selectedId=id;openPanel(id);
+  if(viewMode==='folder')renderFolderView();
+}
+function deleteNode(id){
+  const nd=node(id);if(!nd||nd.isRoot)return;
+  const p=node(nd.parentId);if(p)p.children=p.children.filter(c=>c!==id);
+  const del=[id];const collect=nid=>{const n=node(nid);if(n)n.children.forEach(c=>{del.push(c);collect(c);});};collect(id);
+  S.nodes=S.nodes.filter(n=>!del.includes(n.id));
+  del.forEach(did=>{nodeEls[did]?.remove();delete nodeEls[did];});
+  if(del.includes(selectedId))closePanel();
+  fullRender();save();
+  if(viewMode==='folder')renderFolderView();
+}
+function reparent(id,newParentId){
+  const nd=node(id);if(!nd||id==='root'||id===newParentId)return;
+  // 防止移動到自己的子孫節點（循環檢查）
+  let c=newParentId;while(c){if(c===id){toast('無法移動到自己的子節點');return;}c=node(c)?.parentId;}
+  // 從舊 parent 的 children 移除
+  const op=node(nd.parentId);if(op)op.children=op.children.filter(x=>x!==id);
+  // 掛到新 parent
+  const np=node(newParentId);if(!np)return;
+  np.children.push(id);
+  nd.parentId=newParentId;
+  // 整棵子樹繼承新 parent 的 branchId（如同資料夾剪下貼上）
+  const newBranch=newParentId==='root'?nd.branchId:np.branchId;
+  function propagateBranch(nid,bid){
+    const n=node(nid);if(!n)return;
+    n.branchId=bid;
+    n.children.forEach(cid=>propagateBranch(cid,bid));
+  }
+  propagateBranch(id,newBranch);
+  fullRender();save();toast('已移動');
+}
+
+// ═══════════════════════════════════
+// SCHEMA MODE (新/舊)
+// ═══════════════════════════════════
+
+// ═══════════════════════════════════
+// BRANCH DETAIL MODAL
+// ═══════════════════════════════════
+function showBranchDetail(tier,id,e){
+  e&&e.stopPropagation();
+  let item,tierLabel,tierColor;
+  if(tier==='main'){
+    item=S.mainBranches.find(b=>b.id===id);
+    tierLabel='主版塊';tierColor='var(--accent)';
+  } else if(tier==='sub'){
+    item=S.subBranches.find(b=>b.id===id);
+    tierLabel='次版塊';tierColor='var(--green)';
+  } else {
+    item=S.leafBranches.find(b=>b.id===id);
+    tierLabel='第三層';tierColor='var(--gold)';
+  }
+  if(!item)return;
+  document.getElementById('bd-dot').style.background=item.color;
+  document.getElementById('bd-tier').textContent=tierLabel;
+  document.getElementById('bd-tier').style.background=tierColor==='var(--accent)'?'rgba(74,158,255,.15)':tierColor==='var(--green)'?'rgba(61,220,132,.15)':'rgba(245,197,66,.15)';
+  document.getElementById('bd-tier').style.color=tierColor;
+  document.getElementById('bd-name').textContent=item.name;
+  document.getElementById('bd-desc').textContent=item.desc||'（尚無說明）';
+  _openModal('modal-branch-detail');
+}
+
+// ═══════════════════════════════════
+// MANAGE NEW BRANCHES
+// ═══════════════════════════════════
+let _ebTier=null,_ebEditId=null,_ebColor=PALETTE[0];
+function openManageNew(){
+  renderManageNew();
+  _openModal('modal-manage-new');
+}
+function renderManageNew(){
+  const body=document.getElementById('manage-new-body');
+  let html='';
+  (S.mainBranches||[]).forEach(m=>{
+    html+=`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);">
+        <div style="width:10px;height:10px;border-radius:50%;background:${m.color};flex-shrink:0;"></div>
+        <span style="font-weight:700;font-size:13px;flex:1;">${m.name}</span>
+        <button class="btn" style="font-size:10px;padding:3px 7px;" onclick="editBranch('main','${m.id}',event)">編輯</button>
+        <button class="btn danger" style="font-size:10px;padding:3px 7px;" onclick="deleteBranch('main','${m.id}')">刪除</button>
+        <button class="btn primary" style="font-size:10px;padding:3px 7px;" onclick="addSubBranch('${m.id}')">＋次版塊</button>
+      </div>`;
+    (S.subBranches||[]).filter(s=>s.mainId===m.id).forEach(s=>{
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px 8px 24px;border-bottom:1px solid var(--border);">
+        <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
+        <span style="font-size:12px;flex:1;color:var(--text2);">${s.name}</span>
+        <button class="btn" style="font-size:10px;padding:2px 6px;" onclick="editBranch('sub','${s.id}',event)">編輯</button>
+        <button class="btn danger" style="font-size:10px;padding:2px 6px;" onclick="deleteBranch('sub','${s.id}')">刪除</button>
+        <button class="btn primary" style="font-size:10px;padding:2px 6px;" onclick="addLeafBranch('${s.id}')">＋第三層</button>
+      </div>`;
+      (S.leafBranches||[]).filter(l=>l.subId===s.id).forEach(l=>{
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px 6px 40px;border-bottom:1px solid var(--border);">
+          <div style="width:7px;height:7px;border-radius:50%;background:${l.color};flex-shrink:0;"></div>
+          <span style="font-size:11px;flex:1;color:var(--text3);">${l.name}</span>
+          <button class="btn" style="font-size:10px;padding:2px 5px;" onclick="editBranch('leaf','${l.id}',event)">編輯</button>
+          <button class="btn danger" style="font-size:10px;padding:2px 5px;" onclick="deleteBranch('leaf','${l.id}')">刪除</button>
+        </div>`;
+      });
+    });
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+function _openEb(title,tier,id,name,desc,color){
+  _ebTier=tier;_ebEditId=id;_ebColor=color||L1_COLORS[0].hex;
+  document.getElementById('eb-title').textContent=title;
+  document.getElementById('eb-name').value=name||'';
+  document.getElementById('eb-desc').value=desc||'';
+  _renderEbSwatches();
+  _openModal('modal-edit-branch');
+}
+
+function _renderEbSwatches(){
+  const sw=document.getElementById('eb-swatches');
+  const tier=_ebTier;
+
+  if(tier==='main'||tier==='main_edit'){
+    // ── L1：10個族，每族顯示代表色 + 族名，單行橫排 ──
+    // 選中的族展開顯示該族10個L2色
+    const selIdx=findColorIdx(_ebColor);
+    let html=`<div style="margin-bottom:6px;">
+      <div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">選擇色族（主版塊代表色）</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+    L1_COLORS.forEach((c,i)=>{
+      const isSel=selIdx===i;
+      html+=`<div onclick="selectL1Family(${i})" title="${c.name}"
+        style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 5px;border-radius:6px;
+        border:2px solid ${isSel?'#fff':'transparent'};background:${isSel?'rgba(255,255,255,.08)':'transparent'};transition:all .15s;">
+        <div style="width:22px;height:22px;border-radius:50%;background:${c.hex};box-shadow:${isSel?'0 0 8px '+c.hex:'none'};"></div>
+        <div style="font-size:8px;color:${isSel?'#fff':'var(--text3)'};white-space:nowrap;">${c.name}</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+    // 展開選中族的L2同族色
+    const variants=L2_VARIANTS[L1_COLORS[selIdx].id]||[];
+    html+=`<div>
+      <div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">同族鄰近色（次版塊可用）</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+    // L1代表色也放第一個
+    html+=`<div class="color-swatch${_ebColor===L1_COLORS[selIdx].hex?' sel':''}" title="${L1_COLORS[selIdx].name}（基準）" style="background:${L1_COLORS[selIdx].hex}" onclick="selectEbColor('${L1_COLORS[selIdx].hex}',this)"></div>`;
+    variants.forEach(hex=>{
+      html+=`<div class="color-swatch${_ebColor===hex?' sel':''}" style="background:${hex}" onclick="selectEbColor('${hex}',this)"></div>`;
+    });
+    html+=`</div></div>`;
+    // L3深淺預覽
+    const shades=L3_SHADES[L1_COLORS[selIdx].id]||[];
+    html+=`<div style="margin-top:8px;">
+      <div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">深淺階（第三層可用）</div>
+      <div style="display:flex;gap:5px;">`;
+    shades.forEach((hex,i)=>{
+      html+=`<div class="color-swatch${_ebColor===hex?' sel':''}" title="深淺 ${i+1}" style="background:${hex};border-radius:4px;width:20px;height:20px;" onclick="selectEbColor('${hex}',this)"></div>`;
+    });
+    html+=`</div></div>`;
+    sw.innerHTML=html;
+
+  } else if(tier==='sub'||tier==='sub_edit'){
+    // ── L2：顯示父族的10個同族鄰近色，橫排 ──
+    const parentMain = tier==='sub_edit'
+      ? (S.mainBranches||[]).find(m=>m.id===(S.subBranches||[]).find(s=>s.id===_ebEditId)?.mainId)
+      : (S.mainBranches||[]).find(m=>m.id===_ebEditId);
+    const colorId=parentMain?.colorId||'blue';
+    const l1=L1_COLORS.find(c=>c.id===colorId);
+    const variants=L2_VARIANTS[colorId]||[];
+    let html=`<div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">
+      同族鄰近色 ── <span style="color:${l1?.hex||'#fff'}">${l1?.name||colorId}</span> 色族
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">`;
+    html+=`<div class="color-swatch${_ebColor===l1?.hex?' sel':''}" title="${l1?.name}（族基準色）" style="background:${l1?.hex};outline:1px dashed rgba(255,255,255,.3);outline-offset:2px;" onclick="selectEbColor('${l1?.hex}',this)"></div>`;
+    variants.forEach(hex=>{
+      html+=`<div class="color-swatch${_ebColor===hex?' sel':''}" style="background:${hex}" onclick="selectEbColor('${hex}',this)"></div>`;
+    });
+    html+=`</div>`;
+    sw.innerHTML=html;
+
+  } else {
+    // ── L3：顯示父族深淺8階，自動分配但可預覽選擇 ──
+    const parentSub = tier==='leaf_edit'
+      ? (S.subBranches||[]).find(s=>s.id===(S.leafBranches||[]).find(l=>l.id===_ebEditId)?.subId)
+      : (S.subBranches||[]).find(s=>s.id===_ebEditId);
+    const parentMain=(S.mainBranches||[]).find(m=>m.id===parentSub?.mainId);
+    const colorId=parentMain?.colorId||'gray';
+    const l1=L1_COLORS.find(c=>c.id===colorId);
+    const shades=L3_SHADES[colorId]||[];
+    let html=`<div style="font-size:9px;color:var(--text3);letter-spacing:1px;margin-bottom:5px;">
+      深淺階 ── <span style="color:${l1?.hex||'#fff'}">${l1?.name||colorId}</span> 色族（深→淺，自動依序分配）
+    </div>
+    <div style="display:flex;gap:6px;align-items:flex-end;">`;
+    shades.forEach((hex,i)=>{
+      const sz=16+i*2; // 深的小、淺的大，視覺強調漸變
+      html+=`<div onclick="selectEbColor('${hex}',this)" title="深淺 ${i+1}" style="
+        width:${sz}px;height:${sz}px;border-radius:4px;background:${hex};cursor:pointer;
+        border:2px solid ${_ebColor===hex?'#fff':'transparent'};
+        box-shadow:${_ebColor===hex?'0 0 6px '+hex:'none'};
+        transition:all .15s;flex-shrink:0;"></div>`;
+    });
+    html+=`</div>`;
+    sw.innerHTML=html;
+  }
+}
+
+function selectL1Family(idx){
+  // 選了一個色族，預設選中L1代表色，並刷新選色器
+  _ebColor=L1_COLORS[idx].hex;
+  _renderEbSwatches();
+}
+function findColorIdById(hex){
+  if(!hex)return'gray';
+  const h=hex.toLowerCase();
+  for(const c of L1_COLORS){if(c.hex===h)return c.id;}
+  return'gray';
+}
+function selectEbColor(c,el){
+  _ebColor=c;
+  _renderEbSwatches();
+}
+function addMainBranch(){
+  const defaultColor=L1_COLORS[(S.mainBranches||[]).length % L1_COLORS.length].hex;
+  _openEb('新增主版塊','main',null,'','',defaultColor);
+}
+function addSubBranch(mainId){
+  const main=(S.mainBranches||[]).find(m=>m.id===mainId);
+  const colorId=main?.colorId||findColorIdById(main?.color)||'blue';
+  const existingSubs=(S.subBranches||[]).filter(s=>s.mainId===mainId);
+  const variants=L2_VARIANTS[colorId]||L2_VARIANTS.blue;
+  const defaultColor=variants[existingSubs.length % variants.length];
+  _openEb('新增次版塊','sub',mainId,'','',defaultColor);
+  _ebEditId=mainId;
+}
+function addLeafBranch(subId){
+  const sub=(S.subBranches||[]).find(s=>s.id===subId);
+  const main=(S.mainBranches||[]).find(m=>m.id===sub?.mainId);
+  const colorId=main?.colorId||'gray';
+  const existingLeaves=(S.leafBranches||[]).filter(l=>l.subId===subId);
+  const shades=L3_SHADES[colorId]||L3_SHADES.gray;
+  const defaultColor=getShadeColor(colorId, existingLeaves.length);
+  _openEb('新增第三層版塊','leaf',subId,'','',defaultColor);
+  _ebEditId=subId;
+}
+function editBranch(tier,id,e){
+  e&&e.stopPropagation();
+  let arr=tier==='main'?S.mainBranches:tier==='sub'?S.subBranches:S.leafBranches;
+  const item=arr.find(b=>b.id===id);if(!item)return;
+  _openEb('編輯版塊',tier+'_edit',id,item.name,item.desc,item.color);
+  _ebEditId=id;
+}
+function confirmEditBranch(){
+  const name=document.getElementById('eb-name').value.trim();
+  const desc=document.getElementById('eb-desc').value.trim();
+  if(!name){toast('請輸入名稱');return;}
+  if(_ebTier==='main'){
+    const id='m'+Date.now();
+    const ci=findColorIdx(_ebColor);
+    const colorId=L1_COLORS[ci].id;
+    const col=_ebColor;
+    if(!S.mainBranches)S.mainBranches=[];
+    S.mainBranches.push({id,name,colorIdx:ci,colorId,color:col,desc});
+    S.branches.push({id,name,color:col});
+  } else if(_ebTier==='sub'){
+    const id='s'+Date.now();
+    const main=(S.mainBranches||[]).find(m=>m.id===_ebEditId);
+    const ci=main?main.colorIdx:findColorIdx(_ebColor);
+    const col=_ebColor;
+    if(!S.subBranches)S.subBranches=[];
+    const subColorId=main?.colorId||L1_COLORS[ci%L1_COLORS.length].id;
+    S.subBranches.push({id,mainId:_ebEditId,colorIdx:ci,colorId:subColorId,name,color:col,desc});
+  } else if(_ebTier==='leaf'){
+    const id='l'+Date.now();
+    const sub=(S.subBranches||[]).find(s=>s.id===_ebEditId);
+    const main=(S.mainBranches||[]).find(m=>m.id===sub?.mainId);
+    const colorId=main?.colorId||'gray';
+    const ci=main?main.colorIdx:findColorIdx(_ebColor);
+    // 自動分配深淺序列
+    const existingLeaves=(S.leafBranches||[]).filter(l=>l.subId===_ebEditId);
+    const col=getShadeColor(colorId, existingLeaves.length);
+    if(!S.leafBranches)S.leafBranches=[];
+    S.leafBranches.push({id,subId:_ebEditId,colorIdx:ci,colorId,name,color:col,desc});
+  } else if(_ebTier.endsWith('_edit')){
+    const tier=_ebTier.replace('_edit','');
+    const arr=tier==='main'?S.mainBranches:tier==='sub'?S.subBranches:S.leafBranches;
+    const item=arr.find(b=>b.id===_ebEditId);
+    if(item){
+      item.name=name;item.desc=desc;
+      if(tier==='main'){
+        const ci=findColorIdx(_ebColor);
+        item.color=_ebColor;item.colorIdx=ci;item.colorId=L1_COLORS[ci].id;
+      } else if(tier==='sub'){
+        item.color=_ebColor;
+      }
+      // leaf 編輯時不改顏色（由深淺序列控制）
+    }
+    if(tier==='main'){const b=S.branches.find(b=>b.id===_ebEditId);if(b){b.name=name;b.color=item?.color||_ebColor;}}
+  }
+  closeModal('modal-edit-branch');
+  syncBranchesToMain();save();renderManageNew();
+  if(viewMode==='folder')renderFolderView();
+  if(viewMode==='pie')fullRender();
+  toast('已儲存');
+}
+function deleteBranch(tier,id){
+  if(!confirm('確認刪除此版塊？'))return;
+  if(tier==='main'){
+    S.mainBranches=(S.mainBranches||[]).filter(b=>b.id!==id);
+    S.branches=S.branches.filter(b=>b.id!==id);
+    S.subBranches=(S.subBranches||[]).filter(b=>b.mainId!==id);
+  } else if(tier==='sub'){
+    S.subBranches=(S.subBranches||[]).filter(b=>b.id!==id);
+    S.leafBranches=(S.leafBranches||[]).filter(b=>b.subId!==id);
+  } else {
+    S.leafBranches=(S.leafBranches||[]).filter(b=>b.id!==id);
+  }
+  syncBranchesToMain();save();renderManageNew();
+  if(viewMode==='folder')renderFolderView();
+  if(viewMode==='pie')fullRender();
+  toast('已刪除');
+}
+
+// ═══════════════════════════════════
+// THREE-TIER renderFolderView
+// ═══════════════════════════════════
+function renderFolderViewNew(){
+  const fv=document.getElementById('folder-view');
+  let html=`<div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+    <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="foldAllNew(true)">⊞ 全部展開</button>
+    <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="foldAllNew(false)">⊟ 全部收起</button>
+    <div style="flex:1;"></div>
+    <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="openManageNew()">⊞ 管理版塊</button>
+  </div>`;
+
+  (S.mainBranches||[]).forEach(m=>{
+    const subs=(S.subBranches||[]).filter(s=>s.mainId===m.id);
+    html+=`<div class="main-section">
+      <div class="main-header" onclick="toggleTier('mb-${m.id}',this,'main-chevron')">
+        <div class="main-dot" style="background:${m.color}"></div>
+        <div class="main-name" style="flex:1;">${m.name}</div>
+        <button class="main-info-btn" onclick="showBranchDetail('main','${m.id}',event)">詳情</button>
+        <button class="tier-log-btn" onclick="openJournal('main','${m.id}',event)">日誌</button>
+        <div class="main-chevron">▶</div>
+      </div>
+      <div class="main-body" id="mb-${m.id}">`;
+
+    subs.forEach(s=>{
+      const leaves=(S.leafBranches||[]).filter(l=>l.subId===s.id);
+      html+=`<div class="sub-section">
+        <div class="sub-header" onclick="toggleTier('sb-${s.id}',this,'sub-chevron')">
+          <div class="sub-dot" style="background:${s.color}"></div>
+          <div class="sub-name" style="flex:1;">${s.name}</div>
+          <button class="sub-info-btn" onclick="showBranchDetail('sub','${s.id}',event)">詳情</button>
+          <button class="tier-log-btn" onclick="openJournal('sub','${s.id}',event)">日誌</button>
+          <div class="sub-chevron">▶</div>
+        </div>
+        <div class="sub-body" id="sb-${s.id}">`;
+
+      leaves.forEach(l=>{
+        const lNodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===l.id);
+        html+=`<div class="leaf-section">
+          <div class="leaf-header" onclick="toggleTier('lb-${l.id}',this,'leaf-chevron')">
+            <div class="leaf-dot" style="background:${l.color}"></div>
+            <div class="leaf-name" style="flex:1;">${l.name}</div>
+            <button class="leaf-info-btn" onclick="showBranchDetail('leaf','${l.id}',event)">詳情</button>
+            <button class="tier-log-btn" onclick="openJournal('leaf','${l.id}',event)">日誌</button>
+            <div class="leaf-chevron">▶</div>
+          </div>
+          <div class="leaf-body" id="lb-${l.id}">
+            ${lNodes.length?lNodes.map(n=>renderFolderNodeNew(n)).join(''):'<div style="padding:8px 4px;font-size:11px;color:var(--text3);">尚無日誌</div>'}
+            <div style="padding:4px 0 2px;"><button class="btn" style="font-size:10px;padding:3px 9px;width:100%;" onclick="addNodeToLeaf('${l.id}')">＋ 新增日誌</button></div>
+          </div>
+        </div>`;
+      });
+
+      const subNodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===s.id);
+      if(subNodes.length||!leaves.length){
+        html+=`<div style="padding:6px 8px 6px 44px;border-top:1px solid var(--border);">
+          ${subNodes.map(n=>renderFolderNodeNew(n)).join('')}
+          <button class="btn" style="font-size:10px;padding:3px 9px;margin-top:4px;" onclick="addNodeToSub('${s.id}')">＋ 新增日誌</button>
+        </div>`;
+      }
+      html+='</div></div>';
+    });
+
+    const mainNodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===m.id);
+    if(mainNodes.length){
+      html+=`<div style="padding:8px 12px;border-top:1px solid var(--border);">
+        ${mainNodes.map(n=>renderFolderNodeNew(n)).join('')}
+      </div>`;
+    }
+    html+='</div></div>';
+  });
+
+  fv.innerHTML=html;
+}
+
+function renderFolderNodeNew(nd){
+  const col=nodeColor(nd);
+  const hf=hasFail(nd),hi=!hf&&hasAncestorFail(nd.id);
+  let badges='';
+  if(hf)badges+=`<span class="fn-badge fail">✕</span>`;
+  if(hi)badges+=`<span class="fn-badge inherited">!</span>`;
+  const childHtml=nd.children.map(cid=>{const c=node(cid);return c?`<div style="margin-left:14px;border-left:1px solid var(--border);padding-left:6px;">${renderFolderNodeNew(c)}</div>`:'';}).join('');
+  return`<div class="leaf-node-row" onclick="folderOpenNode('${nd.id}')">
+    <div class="fn-dot" style="background:${col};flex-shrink:0;"></div>
+    <div class="fn-title" style="color:var(--text);font-size:12px;">${nd.title}</div>
+    <div class="fn-badges">${badges}</div>
+  </div>${childHtml}`;
+}
+
+function addNodeToLeaf(leafId){
+  const t=prompt('新日誌標題：');if(!t)return;
+  addNodeTo(t,'root',leafId);
+}
+function addNodeToSub(subId){
+  const t=prompt('新日誌標題：');if(!t)return;
+  addNodeTo(t,'root',subId);
+}
+
+function toggleTier(bodyId,header,chevronClass){
+  const el=document.getElementById(bodyId);
+  const chev=header.querySelector('.'+chevronClass);
+  const isOpen=el.style.display==='block'||el.style.display==='';
+  if(isOpen&&el.style.display!==''){el.style.display='none';if(chev)chev.classList.remove('open');}
+  else{el.style.display='block';if(chev)chev.classList.add('open');}
+}
+function foldAllNew(expand){
+  ['main-body','sub-body','leaf-body'].forEach(cls=>{
+    document.querySelectorAll('#folder-view .'+cls).forEach(el=>el.style.display=expand?'block':'none');
+  });
+  ['main-chevron','sub-chevron','leaf-chevron'].forEach(cls=>{
+    document.querySelectorAll('#folder-view .'+cls).forEach(chev=>chev.classList.toggle('open',expand));
+  });
+}
+
+// ═══════════════════════════════════
+// JOURNAL SYSTEM
+// ═══════════════════════════════════
+let _jmTier=null,_jmSectionId=null;
+
+function openJournal(tier,sectionId,e){
+  e&&e.stopPropagation();
+  _jmTier=tier;_jmSectionId=sectionId;
+  // find section item
+  const arr=tier==='main'?S.mainBranches:tier==='sub'?S.subBranches:S.leafBranches;
+  const item=arr.find(b=>b.id===sectionId);if(!item)return;
+  document.getElementById('jm-dot').style.background=item.color;
+  document.getElementById('jm-name').textContent=item.name;
+  const tierLabel=tier==='main'?'主版塊日誌':tier==='sub'?'次版塊日誌':'第三層日誌';
+  document.getElementById('jm-tier').textContent=tierLabel;
+  document.getElementById('jm-new-title').value='';
+  renderJournalModal();
+  _openModal('modal-journal');
+}
+
+function renderJournalModal(){
+  if(!_jmTier||!_jmSectionId)return;
+  const arr=_jmTier==='main'?S.mainBranches:_jmTier==='sub'?S.subBranches:S.leafBranches;
+  const item=arr.find(b=>b.id===_jmSectionId);
+  const col=item?.color||'#6b7a96';
+  // 取出直接屬於此版塊的節點（branchId對應）
+  const nodes=S.nodes.filter(n=>!n.isRoot&&n.branchId===_jmSectionId);
+  const body=document.getElementById('jm-body');
+  if(!nodes.length){
+    body.innerHTML='<div style="padding:12px 4px;font-size:11px;color:var(--text3);">尚無日誌。</div>';
+    return;
+  }
+  let html='';
+  nodes.forEach(nd=>{
+    const hf=hasFail(nd),hi=!hf&&hasAncestorFail(nd.id);
+    // 預覽：優先 content，其次 topic，其次 reason
+    const preview=(nd.content||nd.topic||nd.reason||'').replace(/\n/g,' ');
+    const previewText=preview.length>72?preview.slice(0,72)+'…':preview;
+    html+=`<div onclick="jmOpenNode('${nd.id}')" style="
+      display:flex;align-items:flex-start;gap:9px;padding:9px 11px;
+      background:var(--bg3);border:1px solid var(--border);border-radius:7px;
+      cursor:pointer;transition:border-color .15s;"
+      onmouseover="this.style.borderColor='${col}'"
+      onmouseout="this.style.borderColor='var(--border)'">
+      <div style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0;margin-top:4px;"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:${previewText?'3px':'0'};">${escHtml(nd.title)}</div>
+        ${previewText?`<div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(previewText)}</div>`:''}
+      </div>
+      ${hf?`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(255,77,106,.15);color:var(--red);border:1px solid rgba(255,77,106,.3);flex-shrink:0;">✕</span>`:''}
+      ${hi?`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(255,159,67,.12);color:var(--orange);border:1px solid rgba(255,159,67,.25);flex-shrink:0;">!</span>`:''}
+    </div>`;
+  });
+  body.innerHTML=html;
+}
+
+function jmOpenNode(id){
+  closeModal('modal-journal');
+  selectedId=id;
+  openPanel(id);
+  if(viewMode==='folder')document.getElementById('folder-backdrop').classList.add('active');
+}
+
+function jmAddLog(){
+  const inp=document.getElementById('jm-new-title');
+  const title=inp.value.trim();
+  if(!title){toast('請輸入日誌標題');return;}
+  // 同版塊最後一個節點當parent，否則掛root
+  const siblings=S.nodes.filter(n=>!n.isRoot&&n.branchId===_jmSectionId);
+  const pid=siblings.length?siblings[siblings.length-1].id:'root';
+  inp.value='';
+  closeModal('modal-journal');
+  addNodeTo(title,pid,_jmSectionId);
+}
+
+function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function openManageSectors(){openManageNew();}
+
+// ═══════════════════════════════════
+// ADD NODE MODAL
+// ═══════════════════════════════════
+function openAddNode(){
+  document.getElementById('new-node-title').value='';
+  document.getElementById('new-node-branch').innerHTML=S.branches.map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
+  _openModal('modal-node');
+  setTimeout(()=>document.getElementById('new-node-title').focus(),100);
+}
+function confirmAddNode(){
+  const t=document.getElementById('new-node-title').value.trim();if(!t)return;
+  const bid=document.getElementById('new-node-branch').value;
+  const bNodes=S.nodes.filter(n=>n.branchId===bid&&!n.isRoot);
+  const pid=bNodes.length?bNodes[bNodes.length-1].id:'root';
+  closeModal('modal-node');addNodeTo(t,pid,bid);
+}
+
+// ═══════════════════════════════════
+// FOLDER VIEW
+// ═══════════════════════════════════
+function renderFolderView(){
+  const fv=document.getElementById('folder-view');
+  renderFolderViewNew();
+}
+function folderOpenNode(id){
+  selectedId=id;
+  openPanel(id);
+  document.getElementById('folder-backdrop').classList.add('active');
+}
+function showCtx(x,y){const m=document.getElementById('ctx-menu');m.style.display='block';m.style.left=x+'px';m.style.top=y+'px';}
+function hideCtx(){document.getElementById('ctx-menu').style.display='none';}
+function ctxAddChild(){hideCtx();const t=prompt('新節點標題：');if(t)addNodeTo(t,ctxId);}
+function ctxMove(){hideCtx();movingId=ctxId;positionNodes();toast('移動模式：點擊目標節點設為新的上層');}
+function ctxEdit(){hideCtx();selectedId=ctxId;openPanel(ctxId);positionNodes();}
+function ctxDelete(){hideCtx();const nd=node(ctxId);if(!nd||nd.isRoot)return;if(!confirm(`確認刪除「${nd.title}」？`))return;deleteNode(ctxId);}
+
+// ═══════════════════════════════════
+// BRANCHES FLASH
+// ═══════════════════════════════════
+function flashBranch(bid){
+  S.nodes.forEach(n=>{const el=nodeEls[n.id];if(el)el.style.opacity=(!n.isRoot&&n.branchId!==bid)?'.1':'1';});
+  setTimeout(()=>S.nodes.forEach(n=>{const el=nodeEls[n.id];if(el)el.style.opacity='1';}),1600);
+}
+
+// ═══════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════
+function navPush(id){navHist=navHist.slice(0,navIdx+1);navHist.push(id);navIdx=navHist.length-1;updateNavBtns();}
+function updateNavBtns(){
+  const atStart=navIdx<=0,atEnd=navIdx>=navHist.length-1;
+  document.getElementById('nav-prev').disabled=atStart;
+  document.getElementById('nav-next').disabled=atEnd;
+  const tp=document.getElementById('tb-prev'),tn=document.getElementById('tb-next');
+  if(tp)tp.disabled=atStart;if(tn)tn.disabled=atEnd;
+}
+function navPrev(){if(navIdx<=0)return;navIdx--;const id=navHist[navIdx];selectedId=id;_renderPanel(id);focusNode(id);updateNavBtns();}
+function navNext(){if(navIdx>=navHist.length-1)return;navIdx++;const id=navHist[navIdx];selectedId=id;_renderPanel(id);focusNode(id);updateNavBtns();}
+function goHome(){
+  closePanel();
+  // resetView 延遲到 panel 收合後執行，避免雙重 render
+  setTimeout(()=>{vp={x:0,y:0,s:1};drawEdges();positionNodes();},230);
+}
+function focusNode(id){const p=positions[id];if(p){vp.x=-p.x*vp.s;vp.y=-p.y*vp.s;}drawEdges();positionNodes();}
+
+// ═══════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════
+const SIN=document.getElementById('search-input');
+const SR=document.getElementById('search-results');
+SIN.addEventListener('input',()=>{
+  const q=SIN.value.trim().toLowerCase();if(!q){SR.style.display='none';return;}
+  const res=S.nodes.filter(n=>n.title.toLowerCase().includes(q)||(n.reason||'').toLowerCase().includes(q)||(n.tags||[]).some(t=>t.toLowerCase().includes(q)));
+  if(!res.length){SR.style.display='none';return;}
+  SR.style.display='block';
+  SR.innerHTML=res.map(n=>{const b=S.branches.find(b=>b.id===n.branchId);return`<div class="sr-item" onclick="jumpTo('${n.id}')"><div class="sr-title">${n.title}</div><div class="sr-sub">${b?'['+b.name+'] ':''} ${n.reason||''}</div></div>`;}).join('');
+});
+SIN.addEventListener('blur',()=>setTimeout(()=>SR.style.display='none',200));
+function jumpTo(id){
+  if(viewMode==='folder'){folderOpenNode(id);}
+  else{const p=positions[id];if(p){vp.x=-p.x*vp.s;vp.y=-p.y*vp.s;}selectedId=id;openPanel(id);drawEdges();positionNodes();}
+  SR.style.display='none';SIN.value='';
+}
+
+// ═══════════════════════════════════
+// PROJECT NAME
+// ═══════════════════════════════════
+document.getElementById('project-name').addEventListener('change',e=>{
+  S.projectName=e.target.value;const r=node('root');
+  if(r){r.title=e.target.value;if(nodeEls['root']){nodeEls['root'].dataset.sig='';updateNodeEl(nodeEls['root'],r);}}
+  save();
+});
+
+// ═══════════════════════════════════
+// LIGHTBOX / TOAST
+// ═══════════════════════════════════
+function openLb(src){document.getElementById('lb-img').src=src;document.getElementById('lightbox').classList.add('open');}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+
+// ═══════════════════════════════════
+// COPY DOC
+// ═══════════════════════════════════
+function _getTpls(){try{return JSON.parse(localStorage.getItem(TPL_KEY)||'[]');}catch{return[];}}
+function _saveTpls(a){localStorage.setItem(TPL_KEY,JSON.stringify(a));}
+function _getTplDef(){return parseInt(localStorage.getItem(TPL_DEF_KEY)||'-1');}
+function _setTplDef(i){localStorage.setItem(TPL_DEF_KEY,String(i));}
+
+function openCopyDoc(){
+  if(!selectedId)return;
+  const nd=node(selectedId);
+  if(!_copyNodeHistory.find(n=>n.id===selectedId)){
+    _copyNodeHistory.push({id:selectedId,title:nd.title,color:nodeColor(nd)});
+  }
+  document.getElementById('copy-node-label').textContent=nd.title;
+  _insertedNodeIds=new Set();
+  renderCopyNodeTags();
+  document.getElementById('copy-tag-bar').innerHTML=COPY_FIELDS.map(f=>`<button class="ins-tag" data-fid="${f.id}" onclick="insertField('${f.id}','${f.label}')">${f.label}</button>`).join('');
+  const ta=document.getElementById('copy-compose');
+  if(!ta.value.trim()){const di=_getTplDef();const t=_getTpls()[di];if(t)ta.value=t.content||'';}
+  updateCharCount();
+  _openModal('modal-copy');
+  setTimeout(()=>ta.focus(),100);
+}
+function renderCopyNodeTags(){
+  document.getElementById('copy-node-tags').innerHTML=_copyNodeHistory.map(n=>{
+    const done=_insertedNodeIds.has(n.id);
+    return`<button class="ins-tag${done?' dimmed':''}" style="border-color:${n.color};${done?'':'color:'+n.color}" onclick="insertNodeBlock('${n.id}')">${done?'✓ ':''}${n.title}</button>`;
+  }).join('');
+}
+function insertNodeBlock(nid){
+  const nd=node(nid);if(!nd)return;
+  const parts=[];
+  if(nd.title)parts.push(`【標題】\n${nd.title}`);
+  if(nd.reason)parts.push(`【更新原因】\n${nd.reason}`);
+  if(nd.content)parts.push(`【更新內容】\n${nd.content}`);
+  if(nd.walkthrough)parts.push(`【實作說明】\n${nd.walkthrough}`);
+  if(nd.prompt)parts.push(`【AI 指令】\n${nd.prompt}`);
+  if(nd.tags&&nd.tags.length)parts.push(`【標籤】\n${nd.tags.join('、')}`);
+  if(nd.fails&&nd.fails.length)parts.push(`【地雷記錄】\n${nd.fails.map((f,i)=>`${i+1}. ${f}`).join('\n')}`);
+  if(!parts.length){toast(`「${nd.title}」尚無內容`);return;}
+  const block=`\n── ${nd.title} ──\n${parts.join('\n\n')}\n`;
+  const ta=document.getElementById('copy-compose');
+  const s=ta.selectionStart,e=ta.selectionEnd;
+  ta.value=ta.value.slice(0,s)+block+ta.value.slice(e);
+  ta.selectionStart=ta.selectionEnd=s+block.length;ta.focus();
+  _insertedNodeIds.add(nid);renderCopyNodeTags();updateCharCount();
+}
+function insertField(fieldId,label){
+  const nd=node(selectedId);if(!nd)return;
+  let val='';
+  if(fieldId==='title')val=nd.title||'';
+  else if(fieldId==='reason')val=nd.reason||'';
+  else if(fieldId==='content')val=nd.content||'';
+  else if(fieldId==='walkthrough')val=nd.walkthrough||'';
+  else if(fieldId==='prompt')val=nd.prompt||'';
+  else if(fieldId==='tags')val=(nd.tags||[]).join('、')||'';
+  else if(fieldId==='fails')val=(nd.fails||[]).map((f,i)=>`${i+1}. ${f}`).join('\n')||'';
+  if(!val){toast(`「${label}」尚無內容`);return;}
+  const ta=document.getElementById('copy-compose');
+  const s=ta.selectionStart,e=ta.selectionEnd;
+  const block=`\n【${label}】\n${val}\n`;
+  ta.value=ta.value.slice(0,s)+block+ta.value.slice(e);
+  ta.selectionStart=ta.selectionEnd=s+block.length;ta.focus();
+  document.querySelectorAll('#copy-tag-bar .ins-tag').forEach(b=>{if(b.dataset.fid===fieldId)b.classList.add('dimmed');});
+  updateCharCount();
+}
+function updateCharCount(){document.getElementById('copy-char-count').textContent=document.getElementById('copy-compose').value.length+' 字';}
+function clearCompose(){document.getElementById('copy-compose').value='';updateCharCount();document.querySelectorAll('.ins-tag').forEach(b=>b.classList.remove('dimmed'));_insertedNodeIds=new Set();renderCopyNodeTags();}
+function doDocCopy(){
+  const v=document.getElementById('copy-compose').value;if(!v){toast('內容為空');return;}
+  navigator.clipboard.writeText(v).then(()=>{const btn=document.getElementById('copy-confirm-btn');btn.textContent='✓ 已複製！';setTimeout(()=>btn.textContent='複製到剪貼簿',1800);});
+}
+document.getElementById('copy-compose').addEventListener('input',updateCharCount);
+
+// Templates
+function openTplSave(){
+  const t=_getTpls();
+  document.getElementById('tpl-save-grid').innerHTML=Array.from({length:10},(_,i)=>{
+    const s=t[i];
+    return`<div class="tpl-slot${s?' has-data':''}" onclick="saveTplSlot(${i})">
+      <div class="tpl-num">模板${i+1}</div>
+      ${s?`<div class="tpl-preview">${(s.content||'').slice(0,15)}…</div>`:'<div>＋</div>'}
+    </div>`;}).join('');
+  _openModal('modal-tpl-save');
+}
+function saveTplSlot(i){
+  const content=document.getElementById('copy-compose').value;
+  const t=_getTpls();while(t.length<=i)t.push(null);t[i]={content};_saveTpls(t);
+  closeModal('modal-tpl-save');toast(`已儲存到模板 ${i+1}`);
+}
+function openTplSelect(){
+  const t=_getTpls(),di=_getTplDef();
+  document.getElementById('tpl-select-grid').innerHTML=Array.from({length:10},(_,i)=>{
+    const s=t[i];const isD=i===di;
+    return`<div class="tpl-slot${s?' has-data':''}${isD?' is-default':''}" onclick="selectTplSlot(${i})">
+      <div class="tpl-num">${isD?'★ ':''}模板${i+1}</div>
+      ${s?`<div class="tpl-preview">${(s.content||'').slice(0,15)}…</div>`:'<div>—</div>'}
+    </div>`;}).join('');
+  _openModal('modal-tpl-select');
+}
+function selectTplSlot(i){
+  const t=_getTpls();if(!t[i]){toast('此格尚無模板');return;}
+  _setTplDef(i);document.getElementById('copy-compose').value=t[i].content||'';updateCharCount();
+  closeModal('modal-tpl-select');toast(`已套用模板 ${i+1}`);
+}
+
+// ═══════════════════════════════════
+// PERSIST + INIT
+// ═══════════════════════════════════
+function save2(){save();}
+load();
+window.addEventListener('resize',resize);
+resize();
+fullRender();
+</script>
+</body>
+</html>
